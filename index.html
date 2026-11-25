@@ -287,12 +287,12 @@
           <label class="lbl">Strategy</label><select class="select full" id="autoStrategy"></select>
           <label class="lbl">Symbol</label><select class="select full" id="autoSymbol"></select>
           <div class="form-grid">
-            <div><label class="lbl">Base Stake</label><input class="input full" type="number" id="autoStake" value="1"></div>
-            <div><label class="lbl">Max Trades</label><input class="input full" type="number" id="autoMaxTrades" value="20"></div>
-            <div><label class="lbl">Take Profit (USD)</label><input class="input full" type="number" id="autoTP" value="10"></div>
-            <div><label class="lbl">Stop Loss (USD)</label><input class="input full" type="number" id="autoSL" value="10"></div>
-            <div><label class="lbl">Min Confidence %</label><input class="input full" type="number" id="autoConf" value="55"></div>
-            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="martingale">Martingale ×2</option><option value="dalembert">D'Alembert +1</option><option value="none">None (flat)</option><option value="ai">Smart AI Recovery</option></select></div>
+            <div><label class="lbl">Base Stake (USD)</label><input class="input full" type="number" id="autoStake" value="0.35" step="0.05" min="0.35"></div>
+            <div><label class="lbl">Max Trades</label><input class="input full" type="number" id="autoMaxTrades" value="15"></div>
+            <div><label class="lbl">Take Profit (USD)</label><input class="input full" type="number" id="autoTP" value="1.50" step="0.1"></div>
+            <div><label class="lbl">Stop Loss (USD)</label><input class="input full" type="number" id="autoSL" value="1.50" step="0.1"></div>
+            <div><label class="lbl">Min Confidence %</label><input class="input full" type="number" id="autoConf" value="70"></div>
+            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Smart AI Recovery</option><option value="martingale">Martingale ×2</option></select></div>
           </div>
           <label class="check"><input type="checkbox" id="autoSpeed" checked> Speedbot mode — react instantly to every tick</label>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
