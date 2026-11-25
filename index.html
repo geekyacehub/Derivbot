@@ -294,7 +294,7 @@
             <div><label class="lbl">Min Confidence %</label><input class="input full" type="number" id="autoConf" value="70"></div>
             <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Smart AI Recovery</option><option value="martingale">Martingale ×2</option></select></div>
           </div>
-          <label class="check"><input type="checkbox" id="autoSpeed" checked> Speedbot mode — react instantly to every tick</label>
+          <label class="check"><input type="checkbox" id="autoSpeed"> Speedbot mode — react instantly to every tick</label>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
           <div class="btn-row"><button class="btn btn-green btn-lg" id="autoStartBtn" onclick="toggleAutoTrader()">▶ START AUTO-TRADER</button><button class="btn btn-red2" onclick="stopAutoTrader()">■ Stop</button></div>
           <div class="auto-stats" id="autoStats"></div>
