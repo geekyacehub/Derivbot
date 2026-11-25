@@ -518,9 +518,9 @@ function autoDecision(sym){
       const ticks=S.ticks[s.id]||[];
       const r=ticks.length>15?rsi(ticks,14):50;
       const score=top.win + (r<35||r>65?3:0);
-      if(!best || score>best.score) best={...top, sym:s.id, score, rsiVal:r};
+      if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', sym:s.id, score, rsiVal:r};
     });
-    if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
+    if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} ${best.barrier!==undefined?best.barrier:''} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
   }
   if(strat==='over_under'){ let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; } return {...best,reason:`Over/Under edge ${best.win.toFixed(1)}% on ${st.n} ticks`}; }
   if(strat==='even_odd'){ return st.evenPct>st.oddPct? {type:'DIGITEVEN',barrier:0,win:st.evenPct,reason:`Even ${st.evenPct.toFixed(1)}% vs Odd ${st.oddPct.toFixed(1)}%`}:{type:'DIGITODD',barrier:0,win:st.oddPct,reason:`Odd ${st.oddPct.toFixed(1)}% vs Even ${st.evenPct.toFixed(1)}%`}; }
