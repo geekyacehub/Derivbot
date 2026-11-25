@@ -143,10 +143,9 @@ function openNewDerivWS(wsUrl, acc){
     if(d.balance){
       const newBal=+d.balance.balance, diff=newBal-S.balance;
       S.balance=newBal; updateConnUI();
-      if(S.auto.running && Math.abs(diff)>0.001){
-        S.auto.pnl+=diff;
-        if(diff>0){ S.auto.wins++; autoLog(`✅ WIN +$${fmt(diff)} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'win'); }
-        else{ autoLog(`▶ Stake -$${fmt(Math.abs(diff))} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'info'); }
+      if(S.auto.startBalance!==undefined && Math.abs(diff)>0.001){
+        if(diff>0){ S.auto.pnl=newBal-S.auto.startBalance; S.auto.wins++; autoLog(`✅ WIN +$${fmt(diff)} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'win'); }
+        else{ autoLog(`▶ Stake -$${fmt(Math.abs(diff))} · Waiting for settlement…`,'info'); }
         renderAutoStats();
       }
     }
