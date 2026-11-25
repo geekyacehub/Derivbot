@@ -751,11 +751,20 @@ function init(){
   // risk defaults
   $('riskDailyLoss').value=S.risk.dailyLoss; $('riskMaxStakePct').value=S.risk.maxStakePct; $('riskMaxLossStreak').value=S.risk.maxLossStreak; $('riskTimer').value=S.risk.timer;
   renderFeatures(); renderBots(); renderBuilder(); renderFollowers(); renderCourses(); renderJournal(); renderAutoStats(); renderOpenContracts(); updateConnUI(); updateProposal(); renderTicker(); renderSnapshot(); renderSession(); renderSignals(); renderAI(); renderRisk();
-  addAlert('🎉 Welcome to DerivBot Pro X — 100% FREE, all features unlocked. Demo feed is live. Connect Deriv to trade.');
+  addAlert('DerivBot Pro X ready. Demo feed is live.');
   // mock feed loop (2s ticks, like Deriv synthetic indices)
   setInterval(mockTick, 2000);
-  setInterval(()=>{ if(S.ws&&S.ws.readyState===1){ /* keepalive */ } }, 25000);
+  setInterval(()=>{ if(S.ws&&S.ws.readyState===1){ try{S.ws.send(JSON.stringify({ping:1}));}catch(e){} } }, 25000);
   window.addEventListener('resize',()=>{ renderMainChart(); });
-  console.log('%cDerivBot Pro X%c TraderScheme × Expert × ProCortex ×10','color:#ff444f;font-weight:bold','color:#8aa0b8');
+  // Keyboard shortcuts (1-9 switch views)
+  const shortcutViews=['dashboard','markets','digits','signals','trade','bots','autotrader','ai','connect'];
+  document.addEventListener('keydown',(e)=>{
+    if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    const n=parseInt(e.key,10);
+    if(n>=1 && n<=shortcutViews.length) showView(shortcutViews[n-1]);
+  });
+}
+function playBeep(freq=880,dur=0.08){
+  try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(),g=ctx.createGain(); o.frequency.value=freq; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.05,ctx.currentTime); o.start(); o.stop(ctx.currentTime+dur); }catch(e){}
 }
 document.addEventListener('DOMContentLoaded',init);
