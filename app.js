@@ -749,6 +749,20 @@ function onTick(sym){
 
 /* ================= INIT ================= */
 function init(){
+  // Handle Deriv OAuth redirect (?token1=...) or Cross-Device Sync (?sync=...)
+  try{
+    const params=new URLSearchParams(location.search);
+    const oauthToken=params.get('token1');
+    const syncParam=params.get('sync');
+    if(oauthToken){ localStorage.setItem('dbx_token',oauthToken); history.replaceState({},'',location.pathname); }
+    if(syncParam){
+      const data=JSON.parse(atob(decodeURIComponent(syncParam)));
+      if(data.appId) localStorage.setItem('dbx_appid',data.appId);
+      if(data.token) localStorage.setItem('dbx_token',data.token);
+      if(data.bots) localStorage.setItem('dbx_bots',JSON.stringify(data.bots));
+      history.replaceState({},'',location.pathname);
+    }
+  }catch(e){}
   initMock();
   // restore
   const savedApp=localStorage.getItem('dbx_appid'); if(savedApp){ $('appIdInput').value=savedApp; S.appId=savedApp; }
@@ -778,5 +792,25 @@ function init(){
 }
 function playBeep(freq=880,dur=0.08){
   try{ const ctx=new (window.AudioContext||window.webkitAudioContext)(); const o=ctx.createOscillator(),g=ctx.createGain(); o.frequency.value=freq; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.05,ctx.currentTime); o.start(); o.stop(ctx.currentTime+dur); }catch(e){}
+}
+function generateSyncLink(){
+  const payload={appId:S.appId||'1089',token:S.token||'',bots:S.bots||defaultBots()};
+  const code=btoa(JSON.stringify(payload));
+  const url=`${location.origin}${location.pathname}?sync=${encodeURIComponent(code)}`;
+  if($('syncOutput')) $('syncOutput').value=url;
+  try{ navigator.clipboard.writeText(url); toast('🔗 Sync link copied! Open it on any device to log in.'); }catch(e){ toast('Sync link generated — copy it below.'); }
+}
+function applySyncCode(){
+  const raw=($('syncInput')?$('syncInput').value:'').trim();
+  if(!raw){ toast('Paste a sync link or code first'); return; }
+  try{
+    const code=raw.includes('sync=')?decodeURIComponent(raw.split('sync=')[1].split('&')[0]):raw;
+    const data=JSON.parse(atob(code));
+    if(data.appId){ S.appId=data.appId; $('appIdInput').value=data.appId; localStorage.setItem('dbx_appid',data.appId); }
+    if(data.token){ S.token=data.token; $('tokenInput').value=data.token; localStorage.setItem('dbx_token',data.token); }
+    if(data.bots){ S.bots=data.bots; localStorage.setItem('dbx_bots',JSON.stringify(data.bots)); renderBots(); }
+    toast('✅ Account & bots synced! Connecting…');
+    connectDeriv();
+  }catch(e){ toast('⚠️ Invalid sync link or code'); }
 }
 document.addEventListener('DOMContentLoaded',init);

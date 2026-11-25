@@ -411,6 +411,17 @@
               <li>Paste the token here and click <b>Connect & Authorize</b></li>
             </ol>
           </div>
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>📱 Login on Another Device (Sync)</h4></div>
+            <p class="muted small">Generate a 1-click login link to use your Deriv account & bots on your phone or another PC without re-entering your token.</p>
+            <div class="btn-row">
+              <button class="btn btn-red btn-sm" onclick="generateSyncLink()">🔗 Copy Sync Login Link</button>
+            </div>
+            <input class="input full mono" id="syncOutput" readonly placeholder="Your 1-click sync link will appear here…" style="margin-top:8px">
+            <div class="btn-row" style="margin-top:10px">
+              <input class="input mono" id="syncInput" placeholder="Paste sync link/code from another device" style="flex:1">
+              <button class="btn btn-outline btn-sm" onclick="applySyncCode()">Login</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
