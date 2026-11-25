@@ -236,3 +236,10 @@ canvas{max-width:100%}
   .grid-3{grid-template-columns:1fr}.tiers{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}
   .main{padding:0 12px 24px}.bt-grid{grid-template-columns:1fr 1fr}
 }
+
+/* Pro-terminal polish */
+.card{backdrop-filter:blur(12px);transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:rgba(255,68,79,.35);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+.btn-red{box-shadow:0 4px 18px rgba(255,68,79,.28)}
+.btn-red:hover{box-shadow:0 6px 24px rgba(255,68,79,.45);transform:translateY(-1px)}
+.nav-item.active{box-shadow:inset 3px 0 0 #ff444f}
