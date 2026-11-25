@@ -135,7 +135,7 @@ function openNewDerivWS(wsUrl, acc){
     updateConnUI();
     logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
     toast(`Connected to Deriv — ${S.currency} ${fmt(S.balance)}`);
-    try{ ws.send(JSON.stringify({balance:1, subscribe:1})); }catch(e){}
+    try{ ws.send(JSON.stringify({balance:1, subscribe:1})); ws.send(JSON.stringify({profit_table:1, description:1, limit:25})); }catch(e){}
   };
   ws.onmessage=(ev)=>{
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
@@ -552,13 +552,15 @@ function autoTick(){
   const sym=S.auto.symbol;
   // guards
   if(S.auto.trades>=S.auto.maxTrades){ autoLog('Max trades reached — stopping','warn'); return stopAutoTrader(); }
-  if(S.auto.pnl>=S.auto.tp){ autoLog('Take profit hit — stopping','win'); return stopAutoTrader(); }
-  if(S.auto.pnl<=-S.auto.sl){ autoLog('Stop loss hit — stopping','loss'); return stopAutoTrader(); }
+  if(S.auto.pnl>=S.auto.tp){ playBeep(1046,0.15); autoLog('Take profit hit — stopping','win'); return stopAutoTrader(); }
+  if(S.auto.pnl<=-S.auto.sl){ playBeep(330,0.25); autoLog('Stop loss hit — stopping','loss'); return stopAutoTrader(); }
   if($('autoGuard').checked && S.auto.pnl < -10){ autoLog('Drawdown guard triggered — pausing','warn'); return stopAutoTrader(); }
   if(S.openContracts.some(c=>c.symbol===sym)) return; // one at a time per symbol
   const dec=autoDecision(sym); if(!dec) return;
   if(dec.win < S.auto.conf){ autoLog(`Skipped — confidence ${dec.win.toFixed(1)}% < ${S.auto.conf}% (${dec.reason})`); return; }
   if(S.connected && S.ws && S.ws.readyState===1){
+    if(S.auto.cooldown>0){ S.auto.cooldown--; return; }
+    S.auto.cooldown=5;
     S.ws.send(JSON.stringify({proposal:1, amount:S.auto.curStake, basis:'stake', contract_type:dec.type, currency:S.currency, duration:5, duration_unit:'t', underlying_symbol:sym, ...(dec.barrier!==undefined&&['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:String(dec.barrier)}:{})}));
     S.auto.trades++;
     autoLog(`▶ BUY ${dec.type} ${sym} $${fmt(S.auto.curStake)} — ${dec.reason} (conf ${dec.win.toFixed(1)}%)`,'info');
