@@ -140,6 +140,8 @@ function openNewDerivWS(wsUrl, acc){
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
     if(d.tick){ const sym=d.tick.symbol; if(!S.ticks[sym]){S.ticks[sym]=[];S.candles[sym]=[];} S.ticks[sym].push(+d.tick.quote); if(S.ticks[sym].length>1500)S.ticks[sym].shift(); S.tickCount++; onTick(sym); }
     if(d.balance){ S.balance=+d.balance.balance; updateConnUI(); }
+    if(d.proposal && d.proposal.id){ ws.send(JSON.stringify({buy:d.proposal.id, price:d.proposal.ask_price||100})); }
+    if(d.buy){ toast(`✅ Trade executed on Deriv! ID ${d.buy.contract_id}`); addAlert(`Trade executed on Deriv: ${d.buy.contract_id}`); }
     if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
   };
   ws.onclose=(ev)=>{ logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; updateConnUI(); };
