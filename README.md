@@ -91,7 +91,9 @@ app.js       — Deriv WebSocket client, mock feed, indicators, digit engine,
 
 ## Deploy
 
-Push to GitHub and enable **GitHub Pages** (Settings → Pages → deploy from branch), or drop the 3 files on Netlify/Vercel/Cloudflare Pages. No build command needed.
+**Render (recommended):** See [DEPLOY.md](./DEPLOY.md) — Blueprint (`render.yaml`) deploys this static site in ~2 minutes on Render's free tier. No build command needed.
+
+Alternatives: GitHub Pages (Settings → Pages → deploy from branch), Netlify, Vercel, or Cloudflare Pages — just serve the 3 files.
 
 ## Deriv API notes
 
