@@ -92,17 +92,57 @@ const DERIV_ENDPOINTS=[
 ];
 function derivURL(ep){ return `${ep||DERIV_ENDPOINTS[0]}?app_id=${encodeURIComponent(S.appId||'1089')}`; }
 let _epIdx=0, _connTimer=null;
-function connectDeriv(){
-  let appId = $('appIdInput').value.trim()||'1089';
-  if(!/^\d+$/.test(appId)){
-    logConn(`⚠️ App ID "${appId}" is not numeric (looks like an OAuth Client ID). Using 1089 instead.`);
-    appId='1089';
-    $('appIdInput').value='1089';
-  }
+async function connectDeriv(){
+  const appId = $('appIdInput').value.trim()||'1089';
   const token = $('tokenInput').value.trim();
   S.appId=appId; S.token=token;
   localStorage.setItem('dbx_appid',appId); if(token) localStorage.setItem('dbx_token',token);
-  _epIdx=0; tryConnect(token);
+  _epIdx=0;
+  // Try new Deriv API (api.derivws.com) first
+  if(token){
+    logConn(`Connecting to new Deriv API (api.derivws.com) app_id=${appId}…`);
+    try{
+      const headers={'Authorization':`Bearer ${token}`,'Content-Type':'application/json'};
+      if(appId && appId!=='1089') headers['Deriv-App-ID']=appId;
+      const accRes=await fetch('https://api.derivws.com/trading/v1/options/accounts',{headers});
+      if(accRes.ok){
+        const accData=await accRes.json();
+        const list=accData.data||accData.accounts||accData||[];
+        if(Array.isArray(list) && list.length>0){
+          const target=list.find(a=>(S.isDemo?a.account_type==='demo'||a.is_virtual:a.account_type==='real'||!a.is_virtual))||list[0];
+          const accId=target.account_id||target.id||target.loginid;
+          logConn(`✅ Found account ${accId}. Requesting WebSocket OTP…`);
+          const otpRes=await fetch(`https://api.derivws.com/trading/v1/options/accounts/${accId}/otp`,{method:'POST',headers});
+          if(otpRes.ok){
+            const otpData=await otpRes.json();
+            const wsUrl=otpData.url||(otpData.data&&otpData.data.url)||`wss://api.derivws.com/trading/v1/options/ws/${S.isDemo?'demo':'real'}?otp=${otpData.otp||(otpData.data&&otpData.data.otp)}`;
+            openNewDerivWS(wsUrl, target);
+            return;
+          }
+        }
+      }
+    }catch(e){ logConn(`New API check: ${e.message}. Trying WebSocket endpoints…`); }
+  }
+  tryConnect(token);
+}
+function openNewDerivWS(wsUrl, acc){
+  try{ if(S.ws) S.ws.close(); }catch(e){}
+  const ws=new WebSocket(wsUrl); S.ws=ws;
+  ws.onopen=()=>{
+    S.connected=true; S.balance=+(acc.balance||S.balance); S.currency=acc.currency||'USD';
+    S.isDemo=!!(acc.account_type==='demo'||acc.is_virtual); S.accountName=acc.account_id||acc.loginid||'Deriv';
+    updateConnUI();
+    logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
+    toast(`Connected to Deriv — ${S.currency} ${fmt(S.balance)}`);
+  };
+  ws.onmessage=(ev)=>{
+    let d; try{d=JSON.parse(ev.data);}catch(e){return;}
+    if(d.tick){ const sym=d.tick.symbol; if(!S.ticks[sym]){S.ticks[sym]=[];S.candles[sym]=[];} S.ticks[sym].push(+d.tick.quote); if(S.ticks[sym].length>1500)S.ticks[sym].shift(); S.tickCount++; onTick(sym); }
+    if(d.balance){ S.balance=+d.balance.balance; updateConnUI(); }
+    if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
+  };
+  ws.onclose=(ev)=>{ logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; updateConnUI(); };
+  ws.onerror=()=>{ logConn('WebSocket error.'); };
 }
 function tryConnect(token){
   try{ if(S.ws) S.ws.close(); }catch(e){}
