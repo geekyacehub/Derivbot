@@ -517,8 +517,10 @@ function autoDecision(sym){
       // Pick highest win-rate signal across all 10 markets
       const top=sig[0];
       const ticks=S.ticks[s.id]||[];
-      const r=ticks.length>15?rsi(ticks,14):50;
-      const score=top.win + (r<35||r>65?3:0);
+      if(ticks.length<30) return;
+      const r=rsi(ticks,14);
+      const streakBonus=(r<32||r>68)?6:0;
+      const score=top.win + streakBonus;
       if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', barrier:top.barrier!==undefined?top.barrier:5, sym:s.id, score, rsiVal:r};
     });
     if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} ${best.barrier} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
