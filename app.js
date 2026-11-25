@@ -187,6 +187,7 @@ function tryConnect(token){
 function disconnectDeriv(){ try{S.ws&&S.ws.close();}catch(e){} S.connected=false; updateConnUI(); logConn('Disconnected.'); toast('Disconnected from Deriv'); }
 function switchAccountMode(mode){
   S.isDemo=(mode==='demo');
+  localStorage.setItem('dbx_isdemo', S.isDemo?'1':'0');
   if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm';
   if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm';
   if(S.token){
@@ -824,6 +825,7 @@ function init(){
   // restore
   const savedApp=localStorage.getItem('dbx_appid'); if(savedApp){ $('appIdInput').value=savedApp; S.appId=savedApp; }
   const savedTok=localStorage.getItem('dbx_token'); if(savedTok){ $('tokenInput').value=savedTok; S.token=savedTok; }
+  const savedDemo=localStorage.getItem('dbx_isdemo'); if(savedDemo!==null){ S.isDemo=(savedDemo==='1'); if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm'; if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm'; }
   const oauthURL=`https://app.deriv.com/oauth2/authorize?app_id=${S.appId}&redirect_uri=${encodeURIComponent(location.origin+location.pathname)}&scope=trade,accounts_read,admin`;
   if($('oauthLink')) $('oauthLink').href=oauthURL;
   if($('gateOAuthBtn')) $('gateOAuthBtn').href=oauthURL;
