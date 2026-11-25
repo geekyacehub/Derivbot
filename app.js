@@ -516,13 +516,14 @@ function autoDecision(sym){
       // Pick ~70% win-rate sweet-spot signal (+$0.14 profit per $0.35 win)
       const top=sig.find(x=>x.barrier===7||x.barrier===2)||sig.find(x=>x.barrier===undefined||(x.barrier>=3&&x.barrier<=7))||sig[0];
       const ticks=S.ticks[s.id]||[];
-      if(ticks.length<30) return;
+      if(ticks.length<10) return;
       const r=rsi(ticks,14);
       const streakBonus=(r<32||r>68)?6:0;
       const score=top.win + streakBonus;
-      if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', barrier:top.barrier!==undefined?top.barrier:5, sym:s.id, score, rsiVal:r};
+      if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', barrier:top.barrier!==undefined?top.barrier:7, sym:s.id, score, rsiVal:r};
     });
     if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} ${best.barrier} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
+    return {type:'DIGITUNDER', barrier:7, win:70, reason:'Titan AI: DIGITUNDER 7 (+$0.14/win)'};
   }
   if(strat==='over_under'){ let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; } return {...best,reason:`Over/Under edge ${best.win.toFixed(1)}% on ${st.n} ticks`}; }
   if(strat==='even_odd'){ return st.evenPct>st.oddPct? {type:'DIGITEVEN',barrier:0,win:st.evenPct,reason:`Even ${st.evenPct.toFixed(1)}% vs Odd ${st.oddPct.toFixed(1)}%`}:{type:'DIGITODD',barrier:0,win:st.oddPct,reason:`Odd ${st.oddPct.toFixed(1)}% vs Even ${st.evenPct.toFixed(1)}%`}; }
