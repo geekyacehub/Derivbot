@@ -767,7 +767,11 @@ function init(){
   // restore
   const savedApp=localStorage.getItem('dbx_appid'); if(savedApp){ $('appIdInput').value=savedApp; S.appId=savedApp; }
   const savedTok=localStorage.getItem('dbx_token'); if(savedTok){ $('tokenInput').value=savedTok; S.token=savedTok; }
-  $('oauthLink').href=`https://app.deriv.com/oauth2/authorize?app_id=${S.appId}&redirect_uri=${encodeURIComponent(location.origin+location.pathname)}&scope=trade,accounts_read,admin`;
+  const oauthURL=`https://app.deriv.com/oauth2/authorize?app_id=${S.appId}&redirect_uri=${encodeURIComponent(location.origin+location.pathname)}&scope=trade,accounts_read,admin`;
+  if($('oauthLink')) $('oauthLink').href=oauthURL;
+  if($('gateOAuthBtn')) $('gateOAuthBtn').href=oauthURL;
+  if($('sideLoginBtn')) $('sideLoginBtn').href=oauthURL;
+  if($('topConnectBtn')) $('topConnectBtn').href=oauthURL;
   // selects
   const opts=SYMBOLS.map(s=>`<option value="${s.sym}">${s.name} (${s.sym})</option>`).join('');
   $('symbolSelect').innerHTML=opts; $('symbolSelect').value=S.selected;
