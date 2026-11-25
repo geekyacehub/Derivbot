@@ -403,21 +403,17 @@
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><h4>🔗 Connect Your Deriv Account</h4><span class="badge">Official Deriv API</span></div>
-          <a class="btn btn-red btn-lg btn-block" id="oauthLink" target="_blank" rel="noopener" style="text-align:center;margin-bottom:14px">⚡ Continue with Deriv (1-Click Login)</a>
-          <p class="muted small">Or paste your API token manually below:</p>
-          <label class="lbl">Deriv App ID (1089 = public demo app — may be blocked, own App ID recommended)</label>
+          <p class="muted small">Paste your Deriv API Token below and click <b>Connect & Authorize</b> to load your Real/Demo balance.</p>
+          <label class="lbl">Deriv App ID</label>
           <input class="input full mono" id="appIdInput" value="1089">
-          <p class="muted small" style="margin-top:6px">⚠️ If connection fails with 1089, create your <b>own free App ID</b> at <a href="https://api.deriv.com" target="_blank" rel="noopener">api.deriv.com</a> (Register app → copy the App ID number) and paste it here instead.</p>
           <label class="lbl">Deriv API Token (from app.deriv.com → API Token)</label>
-          <input class="input full mono" id="tokenInput" type="password" placeholder="e.g. abc123… (leave blank for live feed only)">
+          <input class="input full mono" id="tokenInput" type="password" placeholder="Paste your Deriv API token here…">
           <div class="btn-row">
             <button class="btn btn-red btn-lg" onclick="connectDeriv()">🔌 Connect & Authorize</button>
             <button class="btn btn-outline" onclick="disconnectDeriv()">Disconnect</button>
           </div>
           <div class="btn-row">
-            <a class="btn btn-ghost btn-sm" id="oauthLink" target="_blank" rel="noopener">↗ Open Deriv OAuth (Continue with Deriv)</a>
             <a class="btn btn-ghost btn-sm" href="https://app.deriv.com/api-token" target="_blank" rel="noopener">↗ Get an API Token</a>
-            <a class="btn btn-ghost btn-sm" href="https://api.deriv.com" target="_blank" rel="noopener">↗ Create Own App ID (free)</a>
           </div>
           <div id="connectLog" class="log-box" style="margin-top:12px"></div>
         </div>
