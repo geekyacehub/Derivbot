@@ -146,7 +146,7 @@ function openNewDerivWS(wsUrl, acc){
       if(S.auto.running && Math.abs(diff)>0.001){
         S.auto.pnl+=diff;
         if(diff>0){ S.auto.wins++; autoLog(`✅ WIN +$${fmt(diff)} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'win'); }
-        else{ S.auto.losses++; autoLog(`❌ LOSS -$${fmt(Math.abs(diff))} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'loss'); }
+        else{ autoLog(`▶ Stake -$${fmt(Math.abs(diff))} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'info'); }
         renderAutoStats();
       }
     }
