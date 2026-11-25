@@ -500,7 +500,7 @@ function autoLog(msg,cls='info'){ S.auto.log.unshift(`<div class="${cls}">[${new
 function clearAutoLog(){ S.auto.log=[]; $('autoLog').innerHTML=''; }
 function toggleAutoTrader(){ S.auto.running? stopAutoTrader() : startAutoTrader(); }
 function startAutoTrader(){
-  S.auto={...S.auto,running:true,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:$('autoRecovery').value,trades:0,wins:0,losses:0,pnl:0,curStake:+$('autoStake').value,lossStreak:0};
+  S.auto={...S.auto,running:true,startBalance:S.balance,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:$('autoRecovery').value,trades:0,wins:0,losses:0,pnl:0,curStake:+$('autoStake').value,lossStreak:0};
   $('autoBadge').textContent='RUNNING'; $('autoBadge').style.background='rgba(0,208,156,.2)';
   $('autoPill').textContent='ON'; $('autoStartBtn').textContent='■ RUNNING…';
   autoLog(`▶ Auto-Trader started — ${STRATEGIES[S.auto.strategy]} on ${S.auto.symbol}, stake $${S.auto.stake}, recovery ${S.auto.recovery}`,'warn');
