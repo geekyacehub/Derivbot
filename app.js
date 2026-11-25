@@ -813,4 +813,21 @@ function applySyncCode(){
     connectDeriv();
   }catch(e){ toast('⚠️ Invalid sync link or code'); }
 }
-document.addEventListener('DOMContentLoaded',init);
+function enterDemoMode(){
+  localStorage.setItem('dbx_entered','1');
+  if($('loginGate')) $('loginGate').style.display='none';
+}
+function loginWithToken(){
+  const tok=($('gateTokenInput')?$('gateTokenInput').value:'').trim();
+  if(!tok){ toast('Paste your Deriv API token first'); return; }
+  S.token=tok; localStorage.setItem('dbx_token',tok); localStorage.setItem('dbx_entered','1');
+  if($('tokenInput')) $('tokenInput').value=tok;
+  if($('loginGate')) $('loginGate').style.display='none';
+  connectDeriv();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  init();
+  if(localStorage.getItem('dbx_entered')==='1' || localStorage.getItem('dbx_token')){
+    if($('loginGate')) $('loginGate').style.display='none';
+  }
+});

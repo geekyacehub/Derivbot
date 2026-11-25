@@ -11,6 +11,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- LOGIN GATE -->
+<div id="loginGate" style="position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at top,#1a1f2e,#0b0e14);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="width:100%;max-width:420px;background:#131722;border:1px solid #262d3d;border-radius:16px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.6);text-align:center">
+    <div style="font-size:36px;margin-bottom:8px">◈</div>
+    <h2 style="margin:0 0 6px;font-size:24px">DerivBot <span style="color:#ff444f">Pro X</span></h2>
+    <p style="color:#8aa0b8;font-size:13px;margin:0 0 24px">Sign in with your Deriv account to start trading</p>
+    <a class="btn btn-red btn-lg btn-block" id="gateOAuthBtn" href="https://app.deriv.com/oauth2/authorize?app_id=1089" target="_blank" rel="noopener" style="display:block;text-align:center;margin-bottom:14px">⚡ Login with Deriv (1-Click)</a>
+    <div style="color:#5c6b7f;font-size:12px;margin:14px 0">— or paste your Deriv API Token —</div>
+    <input class="input full mono" id="gateTokenInput" type="password" placeholder="Paste Deriv API Token…" style="margin-bottom:10px">
+    <button class="btn btn-outline btn-block" onclick="loginWithToken()" style="margin-bottom:14px">🔌 Connect & Enter Terminal</button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="enterDemoMode()">Continue in Demo Mode →</button>
+  </div>
+</div>
 
 <!-- TICKER TAPE -->
 <div class="ticker-tape" id="tickerTape"><div class="ticker-track" id="tickerTrack"></div></div>
