@@ -514,8 +514,8 @@ function autoDecision(sym){
     let best=null;
     SYMBOLS.forEach(s=>{
       const sig=computeSignals(s.id); if(!sig||!sig.length) return;
-      // Prefer balanced higher-payout signals (barriers 2..7 or Even/Odd) over 1.09x extreme barriers
-      const top=sig.find(x=>x.barrier===undefined||(x.barrier>=2&&x.barrier<=7))||sig[0];
+      // Pick highest win-rate signal across all 10 markets
+      const top=sig[0];
       const ticks=S.ticks[s.id]||[];
       const r=ticks.length>15?rsi(ticks,14):50;
       const score=top.win + (r<35||r>65?3:0);
