@@ -514,11 +514,12 @@ function autoDecision(sym){
     let best=null;
     SYMBOLS.forEach(s=>{
       const sig=computeSignals(s.id); if(!sig||!sig.length) return;
-      const top=sig[0];
+      // Prefer balanced higher-payout signals (barriers 2..7 or Even/Odd) over 1.09x extreme barriers
+      const top=sig.find(x=>x.barrier===undefined||(x.barrier>=2&&x.barrier<=7))||sig[0];
       const ticks=S.ticks[s.id]||[];
       const r=ticks.length>15?rsi(ticks,14):50;
       const score=top.win + (r<35||r>65?3:0);
-      if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', barrier:top.barrier!==undefined?top.barrier:9, sym:s.id, score, rsiVal:r};
+      if(!best || score>best.score) best={...top, type:top.contract||top.type||'DIGITUNDER', barrier:top.barrier!==undefined?top.barrier:5, sym:s.id, score, rsiVal:r};
     });
     if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} ${best.barrier} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
   }
