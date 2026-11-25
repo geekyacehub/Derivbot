@@ -896,4 +896,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(localStorage.getItem('dbx_entered')==='1' || localStorage.getItem('dbx_token')){
     if($('loginGate')) $('loginGate').style.display='none';
   }
+  if(localStorage.getItem('dbx_token')){
+    connectDeriv();
+  }
 });
