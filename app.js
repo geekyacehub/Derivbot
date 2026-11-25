@@ -201,6 +201,7 @@ function updateConnUI(){
   $('connLabel').textContent = S.connected ? `Connected · ${S.accountName}` : 'Demo Mode';
   $('connBadge').textContent = S.connected ? (S.isDemo?'DEMO':'REAL') : 'DEMO';
   $('connBalance').innerHTML = `${S.currency} ${fmt(S.balance)} <small>${S.isDemo?'Demo':'Real'} account</small>`;
+  if($('sideLoginBtn')) $('sideLoginBtn').style.display = S.connected ? 'none' : 'block';
   $('connSub').textContent = S.connected ? 'Trading through your Deriv account via official API.' : 'No Deriv account needed to explore. Connect to trade real.';
   $('topConnectBtn').textContent = S.connected ? '✓ Connected' : 'Connect Deriv';
   $('tradeModeBadge').textContent = S.connected ? (S.isDemo?'DEMO ACCOUNT':'REAL ACCOUNT') : 'DEMO / MOCK';
