@@ -513,8 +513,8 @@ function autoDecision(sym){
     let best=null;
     SYMBOLS.forEach(s=>{
       const sig=computeSignals(s.id); if(!sig||!sig.length) return;
-      // Pick highest win-rate signal across all 10 markets
-      const top=sig[0];
+      // Pick balanced high-payout signal (+$0.31 per $0.35 win)
+      const top=sig.find(x=>x.barrier===undefined||(x.barrier>=3&&x.barrier<=6))||sig[0];
       const ticks=S.ticks[s.id]||[];
       if(ticks.length<30) return;
       const r=rsi(ticks,14);
