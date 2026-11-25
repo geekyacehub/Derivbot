@@ -495,7 +495,7 @@ function saveBuilderBot(){
 function runBuilderBot(){ if(!S.builderBlocks.length) return toast('Build a flow first'); $('autoStrategy').value='custom'; $('autoSymbol').value=$('builderSymbol').value; $('autoStake').value=$('builderStake').value; showView('autotrader'); toast('▶ Builder bot loaded — press START'); }
 
 /* ================= AUTO-TRADER ================= */
-const STRATEGIES={over_under:'Over/Under Sniper',even_odd:'Even/Odd Hunter',matches:'Matches/Differs Pro',martingale:'Martingale Classic',dalembert:"D'Alembert Bot",boom_crash:'Boom/Crash Spike',step:'Step Index Walker',rsi:'RSI Mean-Reversion',dcircles:'D-Circles Bot',rise_fall:'Rise/Fall Momentum',ai_recovery:'Apex Bot 2026 (AI Recovery)',speedbot:'Speedbot',custom:'Custom Builder Bot'};
+const STRATEGIES={titan_ai:'Titan AI Multi-Market Pro',over_under:'Over/Under Sniper',even_odd:'Even/Odd Hunter',matches:'Matches/Differs Pro',martingale:'Martingale Classic',dalembert:"D'Alembert Bot",boom_crash:'Boom/Crash Spike',step:'Step Index Walker',rsi:'RSI Mean-Reversion',dcircles:'D-Circles Bot',rise_fall:'Rise/Fall Momentum',ai_recovery:'Apex Bot 2026 (AI Recovery)',speedbot:'Speedbot',custom:'Custom Builder Bot'};
 function autoLog(msg,cls='info'){ S.auto.log.unshift(`<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`); if(S.auto.log.length>120)S.auto.log.pop(); $('autoLog').innerHTML=S.auto.log.join(''); }
 function clearAutoLog(){ S.auto.log=[]; $('autoLog').innerHTML=''; }
 function toggleAutoTrader(){ S.auto.running? stopAutoTrader() : startAutoTrader(); }
@@ -510,6 +510,18 @@ function stopAutoTrader(){ S.auto.running=false; $('autoBadge').textContent='STO
 function autoDecision(sym){
   const st=digitStats(sym); const d=st.digits[st.digits.length-1];
   const strat=S.auto.strategy;
+  if(strat==='titan_ai'){
+    let best=null;
+    SYMBOLS.forEach(s=>{
+      const sig=computeSignals(s.id); if(!sig||!sig.length) return;
+      const top=sig[0];
+      const ticks=S.ticks[s.id]||[];
+      const r=ticks.length>15?rsi(ticks,14):50;
+      const score=top.win + (r<35||r>65?3:0);
+      if(!best || score>best.score) best={...top, sym:s.id, score, rsiVal:r};
+    });
+    if(best) return {...best, reason:`Titan AI [${best.sym}]: ${best.type} (Edge ${best.win.toFixed(1)}%, RSI ${best.rsiVal.toFixed(1)})`};
+  }
   if(strat==='over_under'){ let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; } return {...best,reason:`Over/Under edge ${best.win.toFixed(1)}% on ${st.n} ticks`}; }
   if(strat==='even_odd'){ return st.evenPct>st.oddPct? {type:'DIGITEVEN',barrier:0,win:st.evenPct,reason:`Even ${st.evenPct.toFixed(1)}% vs Odd ${st.oddPct.toFixed(1)}%`}:{type:'DIGITODD',barrier:0,win:st.oddPct,reason:`Odd ${st.oddPct.toFixed(1)}% vs Even ${st.evenPct.toFixed(1)}%`}; }
   if(strat==='matches'){ const sorted=Object.entries(st.match).sort((a,b)=>b[1]-a[1]); return {type:'DIGITDIFF',barrier:+sorted[0][0],win:100-sorted[0][1],reason:`Coldest digit ${sorted[0][0]} at ${sorted[0][1].toFixed(1)}% — Differs wins ${(100-sorted[0][1]).toFixed(1)}%`}; }
