@@ -142,6 +142,17 @@ function tryConnect(token){
   ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
 function disconnectDeriv(){ try{S.ws&&S.ws.close();}catch(e){} S.connected=false; updateConnUI(); logConn('Disconnected.'); toast('Disconnected from Deriv'); }
+function switchAccountMode(mode){
+  if(mode==='real' && !S.connected){
+    showView('connect');
+    toast('Paste your Real Deriv API token to switch to Real account');
+    return;
+  }
+  S.isDemo=(mode==='demo');
+  if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm';
+  if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm';
+  updateConnUI();
+}
 function fetchPortfolio(){ if(S.ws&&S.connected) S.ws.send(JSON.stringify({portfolio:1, subscribe:1})); }
 function updateConnUI(){
   $('connDot').className='dot'+(S.connected?' live':'');

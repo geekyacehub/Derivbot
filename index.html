@@ -39,6 +39,10 @@
     <div class="conn-card" id="connCard">
       <div class="conn-row"><span class="dot" id="connDot"></span><span id="connLabel">Demo Mode</span><span class="conn-badge" id="connBadge">DEMO</span></div>
       <div class="conn-balance" id="connBalance">$10,000.00 <small>USD · Demo</small></div>
+      <div class="btn-row" style="margin:6px 0 8px;gap:6px">
+        <button class="btn btn-outline btn-sm" id="btnDemoAcc" onclick="switchAccountMode('demo')" style="flex:1;padding:4px 6px;font-size:11px">Demo</button>
+        <button class="btn btn-ghost btn-sm" id="btnRealAcc" onclick="switchAccountMode('real')" style="flex:1;padding:4px 6px;font-size:11px">Real</button>
+      </div>
       <div class="conn-sub" id="connSub">Connect your Deriv API token to trade live.</div>
       <a class="btn btn-red btn-sm btn-block" id="sideLoginBtn" href="https://app.deriv.com/oauth2/authorize?app_id=1089" target="_blank" rel="noopener" style="text-align:center">⚡ Login with Deriv</a>
     </div>
