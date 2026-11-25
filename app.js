@@ -88,7 +88,12 @@ const DERIV_ENDPOINTS=['wss://ws.derivws.com/websockets/v3','wss://ws.binaryws.c
 function derivURL(ep){ return `${ep||DERIV_ENDPOINTS[0]}?app_id=${encodeURIComponent(S.appId||'1089')}`; }
 let _epIdx=0, _connTimer=null;
 function connectDeriv(){
-  const appId = $('appIdInput').value.trim()||'1089';
+  let appId = $('appIdInput').value.trim()||'1089';
+  if(!/^\d+$/.test(appId)){
+    logConn(`⚠️ App ID "${appId}" is not numeric (looks like an OAuth Client ID). Using 1089 instead.`);
+    appId='1089';
+    $('appIdInput').value='1089';
+  }
   const token = $('tokenInput').value.trim();
   S.appId=appId; S.token=token;
   localStorage.setItem('dbx_appid',appId); if(token) localStorage.setItem('dbx_token',token);
