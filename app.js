@@ -110,7 +110,7 @@ async function connectDeriv(){
         const list=accData.data||accData.accounts||accData||[];
         if(Array.isArray(list) && list.length>0){
           logConn(`Accounts from Deriv: ${list.map(a=>`${a.account_id||a.id||a.loginid}(${a.account_type||(a.is_virtual?'demo':'real')})`).join(', ')}`);
-          const target=list.find(a=>(S.isDemo?a.account_type==='demo'||a.is_virtual:a.account_type==='real'||!a.is_virtual))||list[0];
+          const target=list.find(a=>S.isDemo?(a.account_type==='demo'||a.is_virtual===1||a.is_virtual===true):(a.account_type==='real'||a.is_virtual===0||a.is_virtual===false))||list[0];
           const accId=target.account_id||target.id||target.loginid;
           logConn(`✅ Found account ${accId}. Requesting WebSocket OTP…`);
           const otpRes=await fetch(`https://api.derivws.com/trading/v1/options/accounts/${accId}/otp`,{method:'POST',headers});
