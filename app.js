@@ -385,6 +385,18 @@ const BOT_TEMPLATES=[
   {id:'rsi',icon:'📊',name:'RSI Mean-Reversion',desc:'Buys oversold, sells overbought using RSI(14) + Bollinger Bands on live candles.',tags:['RSI','Bollinger','Mean-Reversion'],strategy:'rsi'},
   {id:'dcircles',icon:'⭕',name:'D-Circles Bot',desc:'Trades the D-Circles distribution — enters on the digit with the strongest statistical case.',tags:['D-Circles','Distribution'],strategy:'dcircles'},
   {id:'risefall',icon:'↗',name:'Rise/Fall Momentum',desc:'Follows tick-to-tick momentum bias across all synthetic indices.',tags:['Momentum','Rise/Fall'],strategy:'rise_fall'},
+  {id:'fib',icon:'🌀',name:'Fibonacci Recovery',desc:'Uses the 1-1-2-3-5-8 Fibonacci sequence for controlled, mathematical drawdown recovery.',tags:['Fibonacci','Recovery'],strategy:'martingale'},
+  {id:'oscar',icon:'🎩',name:'Oscar\'s Grind',desc:'Increases stake by +1 unit only after wins in a losing cycle — targets +1 unit profit per cycle.',tags:['Low Risk','Grind'],strategy:'dalembert'},
+  {id:'antimart',icon:'⚡',name:'Anti-Martingale (Paroli)',desc:'Doubles stake on winning streaks to ride hot runs while keeping losses at base stake.',tags:['Streak','Paroli'],strategy:'speedbot'},
+  {id:'kelly',icon:'📐',name:'Kelly Criterion Bot',desc:'Dynamically sizes each stake using the Kelly formula based on live win-rate edge.',tags:['Math','Sizing'],strategy:'ai_recovery'},
+  {id:'macd',icon:'📉',name:'MACD Crossover Bot',desc:'Enters Rise/Fall on MACD(12,26,9) signal-line crossovers confirmed by histogram momentum.',tags:['MACD','Trend'],strategy:'rise_fall'},
+  {id:'bb_squeeze',icon:'🎯',name:'Bollinger Squeeze',desc:'Detects low-volatility Bollinger Band squeezes and trades the explosive breakout tick.',tags:['Bollinger','Breakout'],strategy:'rsi'},
+  {id:'diff90',icon:'🛡️',name:'Differs 90% Safe',desc:'Targets ~90% win-rate Digit Differs on the coldest digit with strict streak-gap filtering.',tags:['Digits','High Win%'],strategy:'matches'},
+  {id:'over1',icon:'🔥',name:'Over 1 / Under 8 Sniper',desc:'High-probability Over 1 or Under 8 entries when digits 0-1 or 8-9 are statistically cold.',tags:['Digits','Sniper'],strategy:'over_under'},
+  {id:'ai_ens',icon:'🧠',name:'AI Ensemble Pro',desc:'Combines digit frequency, Markov transition matrix, and RSI momentum into one consensus vote.',tags:['AI','Ensemble'],strategy:'ai_recovery'},
+  {id:'v100_turbo',icon:'🏎️',name:'V100 Turbo Scalper',desc:'High-frequency 1-tick scalper tuned for Volatility 100 (1s) micro-trends.',tags:['V100','Scalp'],strategy:'speedbot'},
+  {id:'streak_rev',icon:'🔄',name:'Streak Reversal Bot',desc:'Fades extreme 4+ consecutive Even/Odd or Rise/Fall streaks using mean-reversion.',tags:['Reversal','Mean'],strategy:'even_odd'},
+  {id:'scanner_bot',icon:'📡',name:'Multi-Market Scanner',desc:'Scans all 10 synthetic indices simultaneously and trades only the highest-edge symbol.',tags:['Scanner','All Markets'],strategy:'ai_recovery'},
 ];
 function defaultBots(){ return BOT_TEMPLATES.map(b=>({...b,installed:false})); }
 function renderBots(){
