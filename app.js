@@ -140,7 +140,16 @@ function openNewDerivWS(wsUrl, acc){
   ws.onmessage=(ev)=>{
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
     if(d.tick){ const sym=d.tick.symbol; if(!S.ticks[sym]){S.ticks[sym]=[];S.candles[sym]=[];} S.ticks[sym].push(+d.tick.quote); if(S.ticks[sym].length>1500)S.ticks[sym].shift(); S.tickCount++; onTick(sym); }
-    if(d.balance){ S.balance=+d.balance.balance; updateConnUI(); }
+    if(d.balance){
+      const newBal=+d.balance.balance, diff=newBal-S.balance;
+      S.balance=newBal; updateConnUI();
+      if(S.auto.running && Math.abs(diff)>0.001){
+        S.auto.pnl+=diff;
+        if(diff>0){ S.auto.wins++; autoLog(`✅ WIN +$${fmt(diff)} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'win'); }
+        else{ S.auto.losses++; autoLog(`❌ LOSS -$${fmt(Math.abs(diff))} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'loss'); }
+        renderAutoStats();
+      }
+    }
     if(d.proposal && d.proposal.id){ ws.send(JSON.stringify({buy:d.proposal.id, price:d.proposal.ask_price||100})); }
     if(d.buy){ toast(`✅ Trade executed on Deriv! ID ${d.buy.contract_id}`); addAlert(`Trade executed on Deriv: ${d.buy.contract_id}`); }
     if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
