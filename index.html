@@ -389,8 +389,9 @@
         <div class="card">
           <div class="card-head"><h4>🔗 Connect Your Deriv Account</h4><span class="badge">Official Deriv API</span></div>
           <p class="muted">We use Deriv's official WebSocket API (<span class="mono">wss://ws.derivws.com</span>). Your token is stored only in your browser (localStorage) and sent only to Deriv. We never see your password.</p>
-          <label class="lbl">Deriv App ID (default 1089 = public demo app)</label>
+          <label class="lbl">Deriv App ID (1089 = public demo app — may be blocked, own App ID recommended)</label>
           <input class="input full mono" id="appIdInput" value="1089">
+          <p class="muted small" style="margin-top:6px">⚠️ If connection fails with 1089, create your <b>own free App ID</b> at <a href="https://api.deriv.com" target="_blank" rel="noopener">api.deriv.com</a> (Register app → copy the App ID number) and paste it here instead.</p>
           <label class="lbl">Deriv API Token (from app.deriv.com → API Token)</label>
           <input class="input full mono" id="tokenInput" type="password" placeholder="e.g. abc123… (leave blank for live feed only)">
           <div class="btn-row">
@@ -400,6 +401,7 @@
           <div class="btn-row">
             <a class="btn btn-ghost btn-sm" id="oauthLink" target="_blank" rel="noopener">↗ Open Deriv OAuth (Continue with Deriv)</a>
             <a class="btn btn-ghost btn-sm" href="https://app.deriv.com/api-token" target="_blank" rel="noopener">↗ Get an API Token</a>
+            <a class="btn btn-ghost btn-sm" href="https://api.deriv.com" target="_blank" rel="noopener">↗ Create Own App ID (free)</a>
           </div>
           <div id="connectLog" class="log-box" style="margin-top:12px"></div>
         </div>

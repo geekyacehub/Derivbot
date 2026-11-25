@@ -84,17 +84,27 @@ function mockTick(){
 }
 
 /* ================= DERIV WEBSOCKET ================= */
-function derivURL(){ return `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(S.appId||'1089')}`; }
+const DERIV_ENDPOINTS=['wss://ws.derivws.com/websockets/v3','wss://ws.binaryws.com/websockets/v3'];
+function derivURL(ep){ return `${ep||DERIV_ENDPOINTS[0]}?app_id=${encodeURIComponent(S.appId||'1089')}`; }
+let _epIdx=0, _connTimer=null;
 function connectDeriv(){
   const appId = $('appIdInput').value.trim()||'1089';
   const token = $('tokenInput').value.trim();
   S.appId=appId; S.token=token;
   localStorage.setItem('dbx_appid',appId); if(token) localStorage.setItem('dbx_token',token);
-  logConn(`Connecting to Deriv API (app_id=${appId})…`);
+  _epIdx=0; tryConnect(token);
+}
+function tryConnect(token){
   try{ if(S.ws) S.ws.close(); }catch(e){}
-  const ws = new WebSocket(derivURL()); S.ws=ws;
+  clearTimeout(_connTimer);
+  const ep=DERIV_ENDPOINTS[_epIdx];
+  logConn(`Connecting to Deriv API (${ep}) app_id=${S.appId}…`);
+  let ws; try{ ws=new WebSocket(derivURL(ep)); }catch(e){ logConn('⚠️ WebSocket not supported in this browser.'); return; }
+  S.ws=ws;
+  _connTimer=setTimeout(()=>{ if(ws.readyState===0){ logConn('⏱️ Connection timed out — trying next endpoint…'); try{ws.close();}catch(e){} } }, 10000);
   ws.onopen=()=>{
-    logConn('WebSocket open. Subscribing to live ticks…');
+    clearTimeout(_connTimer);
+    logConn('✅ WebSocket open. Subscribing to live ticks…');
     ws.send(JSON.stringify({ticks:'ALL', subscribe:1, req_id:1}));
     ws.send(JSON.stringify({active_symbols:'brief', req_id:2}));
     if(token){ ws.send(JSON.stringify({authorize:token, req_id:3})); logConn('Authorizing token…'); }
@@ -112,8 +122,14 @@ function connectDeriv(){
     if(d.history){ /* journal sync */ }
     if(d.contract){ /* open contract update */ }
   };
-  ws.onclose=()=>{ logConn('WebSocket closed.'); S.connected=false; updateConnUI(); };
-  ws.onerror=()=>{ logConn('WebSocket error — check app_id / network. Demo feed still running.'); };
+  ws.onclose=(ev)=>{
+    clearTimeout(_connTimer);
+    logConn(`WebSocket closed (code ${ev.code}${ev.reason?': '+ev.reason:''}).`);
+    if(!S.connected && _epIdx < DERIV_ENDPOINTS.length-1){ _epIdx++; logConn('🔄 Trying fallback endpoint…'); setTimeout(()=>tryConnect(token),800); }
+    else if(!S.connected){ logConn('⚠️ Could not connect to Deriv. Tips: (1) Create your OWN App ID at api.deriv.com (1089 is shared & often blocked), (2) Disable ad-blocker/VPN, (3) Try Chrome. Demo feed still running.'); }
+    S.connected=false; updateConnUI();
+  };
+  ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
 function disconnectDeriv(){ try{S.ws&&S.ws.close();}catch(e){} S.connected=false; updateConnUI(); logConn('Disconnected.'); toast('Disconnected from Deriv'); }
 function fetchPortfolio(){ if(S.ws&&S.connected) S.ws.send(JSON.stringify({portfolio:1, subscribe:1})); }
