@@ -84,7 +84,12 @@ function mockTick(){
 }
 
 /* ================= DERIV WEBSOCKET ================= */
-const DERIV_ENDPOINTS=['wss://ws.derivws.com/websockets/v3','wss://ws.binaryws.com/websockets/v3'];
+const DERIV_ENDPOINTS=[
+  'wss://ws.derivws.com/websockets/v3',
+  'wss://blue.derivws.com/websockets/v3',
+  'wss://frontend.derivws.com/websockets/v3',
+  'wss://ws.binaryws.com/websockets/v3'
+];
 function derivURL(ep){ return `${ep||DERIV_ENDPOINTS[0]}?app_id=${encodeURIComponent(S.appId||'1089')}`; }
 let _epIdx=0, _connTimer=null;
 function connectDeriv(){
@@ -140,8 +145,8 @@ function disconnectDeriv(){ try{S.ws&&S.ws.close();}catch(e){} S.connected=false
 function fetchPortfolio(){ if(S.ws&&S.connected) S.ws.send(JSON.stringify({portfolio:1, subscribe:1})); }
 function updateConnUI(){
   $('connDot').className='dot'+(S.connected?' live':'');
-  $('connLabel').textContent = S.connected ? `Connected · ${S.accountName}` : 'Demo Mode — Live Feed';
-  $('connBadge').textContent = S.connected ? (S.isDemo?'DEMO':'REAL') : 'MOCK';
+  $('connLabel').textContent = S.connected ? `Connected · ${S.accountName}` : 'Demo Mode';
+  $('connBadge').textContent = S.connected ? (S.isDemo?'DEMO':'REAL') : 'DEMO';
   $('connBalance').innerHTML = `${S.currency} ${fmt(S.balance)} <small>${S.isDemo?'Demo':'Real'} account</small>`;
   $('connSub').textContent = S.connected ? 'Trading through your Deriv account via official API.' : 'No Deriv account needed to explore. Connect to trade real.';
   $('topConnectBtn').textContent = S.connected ? '✓ Connected' : 'Connect Deriv';

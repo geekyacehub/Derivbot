@@ -19,13 +19,13 @@
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-mark">◈</div>
-      <div><div class="logo-name">DerivBot <span>Pro X</span></div><div class="logo-sub">100% FREE · PERSONAL USE</div></div>
+      <div><div class="logo-name">DerivBot <span>Pro X</span></div><div class="logo-sub">TRADING TERMINAL</div></div>
     </div>
 
     <div class="conn-card" id="connCard">
-      <div class="conn-row"><span class="dot" id="connDot"></span><span id="connLabel">Demo Mode — Live Feed</span><span class="conn-badge" id="connBadge">MOCK</span></div>
+      <div class="conn-row"><span class="dot" id="connDot"></span><span id="connLabel">Demo Mode</span><span class="conn-badge" id="connBadge">DEMO</span></div>
       <div class="conn-balance" id="connBalance">$10,000.00 <small>USD · Demo</small></div>
-      <div class="conn-sub" id="connSub">No Deriv account needed to explore. Connect to trade real.</div>
+      <div class="conn-sub" id="connSub">Connect your Deriv API token to trade live.</div>
       <button class="btn btn-red btn-sm btn-block" onclick="showView('connect')">Connect Deriv Account →</button>
     </div>
 
@@ -55,9 +55,8 @@
     </nav>
 
     <div class="sidebar-foot">
-      <div class="free-mini">🎉 <b>ALL FEATURES FREE</b> — No paid plans, no paywalls, no subscriptions. Built for personal use.</div>
-      <div class="risk-mini">⚠️ Trading involves risk. Past performance ≠ future results. Not affiliated with Deriv Ltd.</div>
-      <div class="ver">DerivBot Pro X v2.1 · 100% Free · TraderScheme + Expert + ProCortex</div>
+      <div class="risk-mini">⚠️ Trading involves risk.</div>
+      <div class="ver">DerivBot Pro X v2.1</div>
     </div>
   </aside>
 
@@ -81,22 +80,20 @@
 
     <!-- ============ DASHBOARD ============ -->
     <section class="view active" id="view-dashboard">
-      <div class="free-banner">🎉 <b>100% FREE — Personal Use</b> · Every bot, signal, AI tool, auto-trader & course is unlocked. No paid plans. No subscriptions. No locked features. <button class="btn btn-green btn-sm" onclick="showView('bots')">Explore free features →</button></div>
       <div class="hero">
         <div class="hero-copy">
-          <div class="eyebrow">★ TRADERSCHEME × EXPERT ANALYSIS × PROCORTEX — COMBINED & MULTIPLIED ×10 · 100% FREE</div>
-          <h2>One platform.<br><span class="grad">Every edge. Every bot. Every signal.</span></h2>
-          <p><b>All features free — no paid plans, no paywalls.</b> Live Deriv tick streaming, digit probability distributions, 96-indicator auto-trader, AI prediction engine, copy trading, backtester, risk manager & a 30-chapter academy — all connected to <b>your</b> Deriv account, for your personal use.</p>
+          <div class="eyebrow">DERIV TRADING TERMINAL</div>
+          <h2>Trade smarter.<br><span class="grad">Live signals, bots & AI.</span></h2>
+          <p>Real-time Deriv tick streaming, digit analysis, automated bots, AI predictions, and risk management connected directly to your Deriv account.</p>
           <div class="hero-cta">
-            <button class="btn btn-red btn-lg" onclick="showView('connect')">🔗 Connect Deriv & Trade</button>
-            <button class="btn btn-outline btn-lg" onclick="showView('signals')">⚡ See Live Signals</button>
-            <button class="btn btn-ghost btn-lg" onclick="showView('bots')">🤖 Browse 12 Bots</button>
+            <button class="btn btn-red btn-lg" onclick="showView('connect')">🔗 Connect Deriv</button>
+            <button class="btn btn-outline btn-lg" onclick="showView('signals')">⚡ Live Signals</button>
+            <button class="btn btn-ghost btn-lg" onclick="showView('bots')">🤖 Bots</button>
           </div>
           <div class="hero-stats">
-            <div><b id="statTicks">0</b><span>Ticks analysed today</span></div>
+            <div><b id="statTicks">0</b><span>Ticks analysed</span></div>
             <div><b>50+</b><span>Indicators</span></div>
             <div><b>10</b><span>Synthetic indices</span></div>
-            <div><b style="color:var(--green)">$0</b><span>Forever free · All features</span></div>
           </div>
         </div>
         <div class="hero-panel">
@@ -406,34 +403,20 @@
           <div id="connectLog" class="log-box" style="margin-top:12px"></div>
         </div>
         <div>
-          <div class="card"><div class="card-head"><h4>How it works</h4></div>
+          <div class="card"><div class="card-head"><h4>How to Connect</h4></div>
             <ol class="steps">
-              <li><b>Create / log in</b> to your Deriv account at app.deriv.com</li>
-              <li><b>Create an API token</b> (API Token section) — tick <i>Trade</i> + <i>Accounts read</i></li>
-              <li><b>Paste the token</b> here and click Connect — we authorize, fetch balance & start the live feed</li>
-              <li><b>Trade</b> manually, via bots, auto-trader or copy trading — all through your own account</li>
+              <li>Log in to <b>app.deriv.com</b></li>
+              <li>Go to <b>API Token</b> → create a token with <i>Trade</i> permission</li>
+              <li>Paste the token here and click <b>Connect & Authorize</b></li>
             </ol>
-            <p class="muted small">No token? You still get the full live market feed, digit analysis, signals, AI & backtester in demo mode. Trading in demo mode settles against the simulated feed.</p>
-          </div>
-          <div class="card" style="margin-top:16px"><div class="card-head"><h4>🎉 Pricing — 100% Free</h4><span class="badge">NO PAID PLANS</span></div>
-            <div class="free-box">
-              <div class="free-price">$0 <span>forever</span></div>
-              <p><b>Every feature is free for your personal use.</b> No subscriptions, no tiers, no paywalls, no locked features.</p>
-              <ul class="free-list">
-                <li>✓ Live market feed & Pro Charts (50+ indicators)</li>
-                <li>✓ Digit Analysis, Signals, AI Prediction & Backtester</li>
-                <li>✓ All 12 Bots + Bot Builder + Auto-Trader</li>
-                <li>✓ Copy Trading (up to 100 followers)</li>
-                <li>✓ Risk Manager, Journal & 30-chapter Academy</li>
-              </ul>
-              <p class="muted small">The only cost is your Deriv account itself — trading through your own account via Deriv's official API.</p>
-            </div>
           </div>
         </div>
       </div>
     </section>
 
     <footer class="footer">
+      DerivBot Pro X · Official Deriv WebSocket API · Trading involves risk.
+    </footer>
       <b>DerivBot Pro X — 100% Free for Personal Use</b> · TraderScheme + Expert Analysis Tool + ProCortex, combined ×10. No paid plans, no paywalls — every feature is free. Third-party tool, not affiliated with Deriv Ltd. Trading involves risk of loss; never trade money you cannot afford to lose.
     </footer>
   </main>
