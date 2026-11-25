@@ -1,6 +1,8 @@
-# DerivBot Pro X — All-in-One Deriv Trading Platform
+# DerivBot Pro X — 100% FREE All-in-One Deriv Trading Platform
 
 **TraderScheme × Expert Analysis Tool × ProCortex — combined, with ×10 features.**
+
+🎉 **All features are free for personal use. No paid plans, no subscriptions, no paywalls, no locked features.** Every bot, signal, AI tool, auto-trader, copy-trading slot, backtest and course is unlocked from day one.
 
 One workspace that connects to **your own Deriv account** and gives you live digit signals, AI predictions, 12 bots, a visual bot builder, a 96-indicator auto-trader, copy trading, a backtester, a risk manager, a trading journal, and a 30-chapter academy.
 
@@ -13,8 +15,8 @@ One workspace that connects to **your own Deriv account** and gives you live dig
 | Source | Features brought in |
 |---|---|
 | **TraderScheme** | Free bot library, Smart AI Recovery, Speedbot, Pro Charts (50+ indicators), visual Bot Builder, copy trader, 30-chapter course, Deriv login |
-| **Expert Analysis Tool** | Live Over/Under, Even/Odd, Matches/Differs win-rate signals, Rise/Fall bias, Deriv OAuth, courses, copy-trading tiers |
-| **ProCortex** | Live market monitor, probability distributions, digit transition analysis, 96-indicator auto-trader, in-browser AI prediction engine, copy trading (100 accounts), trading journal, Free/Pro/Pro Plus tiers |
+| **Expert Analysis Tool** | Live Over/Under, Even/Odd, Matches/Differs win-rate signals, Rise/Fall bias, Deriv OAuth, courses, copy trading |
+| **ProCortex** | Live market monitor, probability distributions, digit transition analysis, 96-indicator auto-trader, in-browser AI prediction engine, copy trading (100 accounts), trading journal |
 
 ## ×10 additions (new in this build)
 
@@ -28,6 +30,10 @@ One workspace that connects to **your own Deriv account** and gives you live dig
 8. **Speedbot mode** — reacts every tick with confidence gating
 9. **Drawdown guard + Smart AI Recovery** — Martingale / D'Alembert / AI recovery modes
 10. **Live ticker tape + alerts** — all symbols streaming, session P/L tracking
+
+## Pricing
+
+**$0 forever.** This build is for personal use — there are no paid plans, tiers, or locked features. The only cost is your own Deriv account (trading happens through your account via Deriv's official API).
 
 ---
 
@@ -66,13 +72,13 @@ You can also use **Continue with Deriv (OAuth)** — the link on the Connect pag
 - **Bot Library** — 12 strategies (Apex, Speedbot, Over/Under Sniper, Martingale, D'Alembert, Boom/Crash, Step, RSI, D-Circles…)
 - **Bot Builder** — click-to-add visual blocks → generates strategy logic
 - **Auto-Trader** — confidence gating, TP/SL, recovery modes, full trade log with reasoning
-- **Copy Trading** — follower tokens with per-token stake/symbol limits
+- **Copy Trading** — follower tokens with per-token stake/symbol limits (up to 100, free)
 - **AI Prediction** — next-digit distribution + auditable prediction log
 - **Backtester** — win rate, P/L, max drawdown, equity curve
 - **Risk Manager** — guards, Kelly calculator, equity curve
 - **Journal** — settled contracts, CSV export
 - **Academy** — 30 chapters with progress tracking
-- **Connect Deriv** — API token, OAuth, pricing
+- **Connect Deriv** — API token, OAuth
 
 ## Files
 

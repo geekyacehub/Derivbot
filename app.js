@@ -1,4 +1,5 @@
-/* DerivBot Pro X — TraderScheme × Expert Analysis × ProCortex combined ×10
+/* DerivBot Pro X — 100% FREE for personal use. No paid plans, no paywalls.
+   TraderScheme × Expert Analysis × ProCortex combined ×10.
    Live Deriv WebSocket API + simulated feed fallback. No build step. */
 'use strict';
 
@@ -724,7 +725,7 @@ function init(){
   // risk defaults
   $('riskDailyLoss').value=S.risk.dailyLoss; $('riskMaxStakePct').value=S.risk.maxStakePct; $('riskMaxLossStreak').value=S.risk.maxLossStreak; $('riskTimer').value=S.risk.timer;
   renderFeatures(); renderBots(); renderBuilder(); renderFollowers(); renderCourses(); renderJournal(); renderAutoStats(); renderOpenContracts(); updateConnUI(); updateProposal(); renderTicker(); renderSnapshot(); renderSession(); renderSignals(); renderAI(); renderRisk();
-  addAlert('Welcome to DerivBot Pro X — demo feed is live. Connect Deriv to trade.');
+  addAlert('🎉 Welcome to DerivBot Pro X — 100% FREE, all features unlocked. Demo feed is live. Connect Deriv to trade.');
   // mock feed loop (2s ticks, like Deriv synthetic indices)
   setInterval(mockTick, 2000);
   setInterval(()=>{ if(S.ws&&S.ws.readyState===1){ /* keepalive */ } }, 25000);

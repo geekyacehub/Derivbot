@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DerivBot Pro X — All-in-One Deriv Trading Platform</title>
-<meta name="description" content="TraderScheme + Expert Analysis + ProCortex combined ×10. Live Deriv digits, AI signals, bots, auto-trader, copy trading, journal & academy.">
+<title>DerivBot Pro X — 100% FREE All-in-One Deriv Trading Platform</title>
+<meta name="description" content="100% FREE for personal use. TraderScheme + Expert Analysis + ProCortex combined ×10. Live Deriv digits, AI signals, bots, auto-trader, copy trading, journal & academy. No paid plans. No paywalls.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -19,7 +19,7 @@
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-mark">◈</div>
-      <div><div class="logo-name">DerivBot <span>Pro X</span></div><div class="logo-sub">3-IN-1 ×10 PLATFORM</div></div>
+      <div><div class="logo-name">DerivBot <span>Pro X</span></div><div class="logo-sub">100% FREE · PERSONAL USE</div></div>
     </div>
 
     <div class="conn-card" id="connCard">
@@ -55,8 +55,9 @@
     </nav>
 
     <div class="sidebar-foot">
+      <div class="free-mini">🎉 <b>ALL FEATURES FREE</b> — No paid plans, no paywalls, no subscriptions. Built for personal use.</div>
       <div class="risk-mini">⚠️ Trading involves risk. Past performance ≠ future results. Not affiliated with Deriv Ltd.</div>
-      <div class="ver">DerivBot Pro X v2.0 · Built from TraderScheme + Expert + ProCortex</div>
+      <div class="ver">DerivBot Pro X v2.1 · 100% Free · TraderScheme + Expert + ProCortex</div>
     </div>
   </aside>
 
@@ -80,11 +81,12 @@
 
     <!-- ============ DASHBOARD ============ -->
     <section class="view active" id="view-dashboard">
+      <div class="free-banner">🎉 <b>100% FREE — Personal Use</b> · Every bot, signal, AI tool, auto-trader & course is unlocked. No paid plans. No subscriptions. No locked features. <button class="btn btn-green btn-sm" onclick="showView('bots')">Explore free features →</button></div>
       <div class="hero">
         <div class="hero-copy">
-          <div class="eyebrow">★ TRADERSCHEME × EXPERT ANALYSIS × PROCORTEX — COMBINED & MULTIPLIED ×10</div>
+          <div class="eyebrow">★ TRADERSCHEME × EXPERT ANALYSIS × PROCORTEX — COMBINED & MULTIPLIED ×10 · 100% FREE</div>
           <h2>One platform.<br><span class="grad">Every edge. Every bot. Every signal.</span></h2>
-          <p>Live Deriv tick streaming, digit probability distributions, 96-indicator auto-trader, AI prediction engine, copy trading, backtester, risk manager & a 30-chapter academy — all connected to <b>your</b> Deriv account.</p>
+          <p><b>All features free — no paid plans, no paywalls.</b> Live Deriv tick streaming, digit probability distributions, 96-indicator auto-trader, AI prediction engine, copy trading, backtester, risk manager & a 30-chapter academy — all connected to <b>your</b> Deriv account, for your personal use.</p>
           <div class="hero-cta">
             <button class="btn btn-red btn-lg" onclick="showView('connect')">🔗 Connect Deriv & Trade</button>
             <button class="btn btn-outline btn-lg" onclick="showView('signals')">⚡ See Live Signals</button>
@@ -94,7 +96,7 @@
             <div><b id="statTicks">0</b><span>Ticks analysed today</span></div>
             <div><b>50+</b><span>Indicators</span></div>
             <div><b>10</b><span>Synthetic indices</span></div>
-            <div><b>&lt;400ms</b><span>Dashboard latency</span></div>
+            <div><b style="color:var(--green)">$0</b><span>Forever free · All features</span></div>
           </div>
         </div>
         <div class="hero-panel">
@@ -303,11 +305,10 @@
         <div class="card">
           <div class="card-head"><h4>📊 Copy Results — Per Follower</h4></div>
           <div id="copyResults"></div>
-          <div class="card-head" style="margin-top:16px"><h4>Copy Tiers (Expert Analysis style)</h4></div>
-          <div class="tiers">
-            <div class="tier"><b>Starter</b><span>$100–$499 balance</span><button class="btn btn-ghost btn-sm" onclick="toast('Contact support for Starter pricing')">Contact</button></div>
-            <div class="tier"><b>Growth</b><span>$500–$999 balance</span><button class="btn btn-ghost btn-sm" onclick="toast('Contact support for Growth pricing')">Contact</button></div>
-            <div class="tier"><b>Pro</b><span>$1,000+ balance</span><button class="btn btn-ghost btn-sm" onclick="toast('Contact support for Pro pricing')">Contact</button></div>
+          <div class="card-head" style="margin-top:16px"><h4>🎉 Copy Trading — Free for Everyone</h4></div>
+          <div class="free-box">
+            <b>Unlimited followers · No tiers · No fees</b>
+            <p>Copy trading works for any account balance — $100 or $10,000, same full access. Add up to 100 follower tokens with per-token stake & symbol limits. 100% free for your personal use.</p>
           </div>
         </div>
       </div>
@@ -412,11 +413,18 @@
             </ol>
             <p class="muted small">No token? You still get the full live market feed, digit analysis, signals, AI & backtester in demo mode. Trading in demo mode settles against the simulated feed.</p>
           </div>
-          <div class="card" style="margin-top:16px"><div class="card-head"><h4>💳 Pricing — All-in-One</h4></div>
-            <div class="tiers">
-              <div class="tier"><b>Free</b><span>$0 forever</span><small>Live feed · Manual trades · Digit analysis · Journal</small><button class="btn btn-outline btn-sm" onclick="toast('You are on Free — enjoy!')">Current</button></div>
-              <div class="tier hot"><b>Pro X</b><span>$100 one-time</span><small>Everything + Auto-Trader · AI · Backtester · Copy</small><button class="btn btn-red btn-sm" onclick="toast('Pro X is unlocked in this build 🎉')">Unlocked</button></div>
-              <div class="tier"><b>Pro X Plus</b><span>$150 one-time</span><small>Everything + Bot library · Academy · ML models</small><button class="btn btn-outline btn-sm" onclick="toast('Plus is unlocked in this build 🎉')">Unlocked</button></div>
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>🎉 Pricing — 100% Free</h4><span class="badge">NO PAID PLANS</span></div>
+            <div class="free-box">
+              <div class="free-price">$0 <span>forever</span></div>
+              <p><b>Every feature is free for your personal use.</b> No subscriptions, no tiers, no paywalls, no locked features.</p>
+              <ul class="free-list">
+                <li>✓ Live market feed & Pro Charts (50+ indicators)</li>
+                <li>✓ Digit Analysis, Signals, AI Prediction & Backtester</li>
+                <li>✓ All 12 Bots + Bot Builder + Auto-Trader</li>
+                <li>✓ Copy Trading (up to 100 followers)</li>
+                <li>✓ Risk Manager, Journal & 30-chapter Academy</li>
+              </ul>
+              <p class="muted small">The only cost is your Deriv account itself — trading through your own account via Deriv's official API.</p>
             </div>
           </div>
         </div>
@@ -424,7 +432,7 @@
     </section>
 
     <footer class="footer">
-      <b>DerivBot Pro X</b> — TraderScheme + Expert Analysis Tool + ProCortex, combined ×10. Third-party tool, not affiliated with Deriv Ltd. Trading involves risk of loss; never trade money you cannot afford to lose.
+      <b>DerivBot Pro X — 100% Free for Personal Use</b> · TraderScheme + Expert Analysis Tool + ProCortex, combined ×10. No paid plans, no paywalls — every feature is free. Third-party tool, not affiliated with Deriv Ltd. Trading involves risk of loss; never trade money you cannot afford to lose.
     </footer>
   </main>
 </div>
