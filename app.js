@@ -109,6 +109,7 @@ async function connectDeriv(){
         const accData=await accRes.json();
         const list=accData.data||accData.accounts||accData||[];
         if(Array.isArray(list) && list.length>0){
+          logConn(`Accounts from Deriv: ${list.map(a=>`${a.account_id||a.id||a.loginid}(${a.account_type||(a.is_virtual?'demo':'real')})`).join(', ')}`);
           const target=list.find(a=>(S.isDemo?a.account_type==='demo'||a.is_virtual:a.account_type==='real'||!a.is_virtual))||list[0];
           const accId=target.account_id||target.id||target.loginid;
           logConn(`✅ Found account ${accId}. Requesting WebSocket OTP…`);
