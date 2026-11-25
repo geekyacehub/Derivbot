@@ -561,7 +561,7 @@ function autoTick(){
   if(dec.win < S.auto.conf){ autoLog(`Skipped — confidence ${dec.win.toFixed(1)}% < ${S.auto.conf}% (${dec.reason})`); return; }
   if(S.connected && S.ws && S.ws.readyState===1){
     if(S.auto.cooldown>0){ S.auto.cooldown--; return; }
-    S.auto.cooldown=5;
+    S.auto.cooldown=7;
     S.ws.send(JSON.stringify({proposal:1, amount:S.auto.curStake, basis:'stake', contract_type:dec.type, currency:S.currency, duration:5, duration_unit:'t', underlying_symbol:sym, ...(dec.barrier!==undefined&&['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:String(dec.barrier)}:{})}));
     S.auto.trades++;
     autoLog(`▶ BUY ${dec.type} ${sym} $${fmt(S.auto.curStake)} — ${dec.reason} (conf ${dec.win.toFixed(1)}%)`,'info');
