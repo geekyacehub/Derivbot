@@ -135,6 +135,7 @@ function openNewDerivWS(wsUrl, acc){
     updateConnUI();
     logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
     toast(`Connected to Deriv — ${S.currency} ${fmt(S.balance)}`);
+    try{ ws.send(JSON.stringify({balance:1, subscribe:1})); }catch(e){}
   };
   ws.onmessage=(ev)=>{
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
