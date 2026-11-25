@@ -389,7 +389,7 @@ function updateProposal(){
 function renderProposal(p){ $('proposalBox').innerHTML=`<b>Deriv Proposal</b> — Ask: $${fmt(p.ask_price)} · Payout: $${fmt(p.payout)} · ID: ${p.id}`; }
 function buyContract(){
   const p=updateProposal();
-  if(S.connected && S.ws){ S.ws.send(JSON.stringify({proposal:1, amount:p.stake, basis:'stake', contract_type:p.type, currency:S.currency, duration:p.dur, duration_unit:'t', symbol:S.selected, underlying_symbol:S.selected, ...(p.barrier!==undefined&&['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(p.type)?{barrier:p.barrier}:{})})); toast('Sending buy to Deriv…'); return; }
+  if(S.connected && S.ws){ S.ws.send(JSON.stringify({proposal:1, amount:p.stake, basis:'stake', contract_type:p.type, currency:S.currency, duration:p.dur, duration_unit:'t', underlying_symbol:S.selected, ...(p.barrier!==undefined&&['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(p.type)?{barrier:String(p.barrier)}:{})})); toast('Sending buy to Deriv…'); return; }
   // mock buy
   const id='MOCK-'+Math.floor(rand(100000,999999));
   const c={id,type:p.type,symbol:S.selected,stake:p.stake,barrier:p.barrier,dur:p.dur,entryTick:S.tickCount,entryPrice:S.ticks[S.selected][S.ticks[S.selected].length-1],status:'OPEN'};
