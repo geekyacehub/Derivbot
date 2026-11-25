@@ -535,6 +535,9 @@ function autoTick(){
   if(S.openContracts.some(c=>c.symbol===sym)) return; // one at a time per symbol
   const dec=autoDecision(sym); if(!dec) return;
   if(dec.win < S.auto.conf){ autoLog(`Skipped — confidence ${dec.win.toFixed(1)}% < ${S.auto.conf}% (${dec.reason})`); return; }
+  if(S.connected && S.ws && S.ws.readyState===1){
+    S.ws.send(JSON.stringify({proposal:1, amount:S.auto.curStake, basis:'stake', contract_type:dec.type, currency:S.currency, duration:5, duration_unit:'t', symbol:sym, ...(dec.barrier!==undefined&&['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:dec.barrier}:{})}));
+  }
   const id='AUTO-'+Math.floor(rand(100000,999999));
   S.openContracts.push({id,type:dec.type,symbol:sym,stake:S.auto.curStake,barrier:dec.barrier,dur:5,entryTick:S.tickCount,entryPrice:S.ticks[sym][S.ticks[sym].length-1],status:'OPEN',auto:true});
   S.auto.trades++;
