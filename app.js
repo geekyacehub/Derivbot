@@ -171,7 +171,12 @@ function handleMarketDiscovery(d,ws){
       if($('feedStatus')) $('feedStatus').textContent='DATA: MARKET DISCOVERY FAILED';
       return true;
     }
-    const available=new Set(d.active_symbols.filter(s=>s && typeof s.symbol==='string' && /^[A-Za-z0-9_.-]{1,64}$/.test(s.symbol) && !Object.hasOwn(Object.prototype,s.symbol) && s.is_trading_suspended!==1 && s.is_trading_suspended!==true).map(s=>s.symbol));
+    // Deriv's current schema uses underlying_symbol; older endpoints use symbol.
+    const available=new Set(d.active_symbols.flatMap(s=>{
+      if(!s || typeof s!=='object' || s.is_trading_suspended===1 || s.is_trading_suspended===true) return [];
+      const code=typeof s.underlying_symbol==='string'?s.underlying_symbol:s.symbol;
+      return typeof code==='string' && /^[A-Za-z0-9_.-]{1,64}$/.test(code) && !Object.hasOwn(Object.prototype,code)?[code]:[];
+    }));
     // Avoid interpolating untrusted display names in existing HTML templates.
     for(const sym of available){
       if(!SYMBOLS.some(s=>s.sym===sym)){
@@ -181,7 +186,7 @@ function handleMarketDiscovery(d,ws){
     }
     S.activeMarkets=SYMBOLS.filter(s=>available.has(s.sym)).map(s=>s.sym);
     renderMarketSelectors();
-    if(!S.activeMarkets.length){ logConn('No configured markets were reported active by Deriv.'); if($('feedStatus')) $('feedStatus').textContent='DATA: NO MATCHING MARKETS'; return true; }
+    if(!S.activeMarkets.length){ logConn(`No usable market codes were found in Deriv's response (${d.active_symbols.length} entries).`); if($('feedStatus')) $('feedStatus').textContent='DATA: NO MATCHING MARKETS'; return true; }
     // Bound initial subscription load; all other symbols are available on demand.
     S.activeMarkets.filter(sym=>SYMBOLS.find(s=>s.sym===sym && !s.liveOnly)).forEach(sym=>subscribeLiveSymbol(sym));
     subscribeLiveSymbol(S.selected);
