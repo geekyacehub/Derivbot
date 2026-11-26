@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('app.js', 'utf8').replace('const REAL_DATA_ONLY=true;', 'const REAL_DATA_ONLY=false;');
-function harness(store=new Map()){
+function harness(store=new Map(), tabStore=new Map()){
   const elements=new Map(), sockets=[];
   function el(id){
     if(!elements.has(id)) elements.set(id,{value:'',textContent:'',innerHTML:'',checked:false,style:{},classList:{add(){},remove(){}},appendChild(){}});
@@ -19,7 +19,8 @@ function harness(store=new Map()){
     message(msg){this.onmessage?.({data:JSON.stringify(msg)});}
     close(){this.readyState=3;this.onclose?.({code:1000,reason:''});}
   }
-  const ctx=vm.createContext({console,URL,WebSocket:FakeWebSocket,localStorage,document:{getElementById:el,createElement(){return el('created')},addEventListener(){}},window:{confirm:()=>true},setTimeout(){return 1},clearTimeout(){}});
+  const sessionStorage={getItem:k=>tabStore.get(k)??null,setItem:(k,v)=>tabStore.set(k,String(v)),removeItem:k=>tabStore.delete(k)};
+  const ctx=vm.createContext({console,URL,WebSocket:FakeWebSocket,localStorage,sessionStorage,document:{getElementById:el,createElement(){return el('created')},addEventListener(){}},window:{confirm:()=>true},setTimeout(){return 1},clearTimeout(){}});
   vm.runInContext(source,ctx);
   const run=code=>vm.runInContext(code,ctx);
   // Rendering is not under test; keep the real transport and order handlers.
@@ -144,5 +145,24 @@ console.log('Mock WebSocket integration checks passed');
   assert.equal(h4.el('connectBtn').disabled,false);
   release({ok:false,status:503});await first;
   assert.equal(h4.sockets.length,0,'cancelled connection must not open fallback');
+  // A reload in the same tab restores the opt-in token and makes a fresh connection.
+  const sharedTab=new Map(), sharedLocal=new Map();
+  const original=harness(sharedLocal,sharedTab);
+  original.el('rememberTab').checked=true;
+  original.run("S.token='refresh-secret'; openNewDerivWS('wss://api.derivws.com/ws?otp=test',{account_id:'VRTC1',account_type:'demo',balance:1000,currency:'USD'})");
+  original.sockets[0].open();
+  assert.ok(sharedTab.has('dbx_tab_connection'));
+  const refreshed=harness(sharedLocal,sharedTab);
+  refreshed.el('appIdInput').value='1089';
+  refreshed.ctx.fetch=async url=>url.includes('/otp')?{ok:true,json:async()=>({url:'wss://api.derivws.com/ws?otp=fresh'})}:{ok:true,json:async()=>({data:[{account_id:'VRTC1',account_type:'demo',is_virtual:1,balance:1000,currency:'USD'}]})};
+  refreshed.run('restoreTabConnection()');
+  assert.equal(refreshed.el('rememberTab').checked,true);
+  await refreshed.run('connectDeriv()');
+  assert.equal(refreshed.sockets.length,1);
+  refreshed.sockets[0].open();
+  assert.equal(refreshed.run('S.connected'),true);
+  assert.equal(sharedLocal.has('dbx_token'),false);
+  refreshed.run('disconnectDeriv()');
+  assert.equal(sharedTab.has('dbx_tab_connection'),false);
   console.log('Async connection cancellation checks passed');
 })().catch(err=>{console.error(err);process.exitCode=1});

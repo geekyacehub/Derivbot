@@ -23,6 +23,7 @@ const SYMBOLS = [
   {sym:'1HZ75V', name:'Volatility 75 (1s) Index', short:'V75-1s', vol:0.0012, base:1450, pip:2},
   {sym:'1HZ100V', name:'Volatility 100 (1s) Index', short:'V100-1s', vol:0.0015, base:1850, pip:2},
 ];
+const BASE_SYMBOL_COUNT=SYMBOLS.length;
 const symByCode = c => SYMBOLS.find(s=>s.sym===c) || SYMBOLS[0];
 
 /* ================= STATE ================= */
@@ -133,12 +134,14 @@ function restoreSimulationFeed(){
   const saved=S.simulationState;
   S.ticks=saved.ticks; S.candles=saved.candles; S.tickCounts=saved.tickCounts;
   S.tickCount=saved.tickCount; S.balance=saved.balance; S.currency=saved.currency; S.equity=saved.equity;
+  SYMBOLS.splice(BASE_SYMBOL_COUNT);
   SYMBOLS.forEach((s,i)=>{s.pip=saved.precisions[i];});
+  if(!SYMBOLS.some(s=>s.sym===S.selected)) S.selected=SYMBOLS[0].sym;
   S.simulationState=null; S.feed='simulation'; S.feedGeneration++; S.activeMarkets=null; S.marketRequest=null; S.tickRequests={};
   if(REAL_DATA_ONLY) renderMarketSelectors();
   updateFeedUI();
 }
-// Only offer the configured instruments Deriv currently reports as active.
+// Offer active Deriv symbols. Additional markets subscribe on selection.
 function renderMarketSelectors(){
   const supported=S.feed==='deriv' && Array.isArray(S.activeMarkets)?SYMBOLS.filter(s=>S.activeMarkets.includes(s.sym)):SYMBOLS;
   const options=supported.map(s=>`<option value="${s.sym}">${s.name} (${s.sym})</option>`).join('');
@@ -151,6 +154,13 @@ function renderMarketSelectors(){
   }
   if(supported.length && !supported.some(s=>s.sym===S.selected)) S.selected=supported[0].sym;
 }
+function subscribeLiveSymbol(sym){
+  if(!REAL_DATA_ONLY || S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(sym)) return false;
+  if(Object.values(S.tickRequests).includes(sym)) return true;
+  const req=++S.orderSeq; S.tickRequests[req]=sym;
+  try{ S.ws.send(JSON.stringify({ticks:sym,subscribe:1,req_id:req})); return true; }
+  catch(e){ delete S.tickRequests[req]; logConn(`Unable to subscribe to ${sym}.`); return false; }
+}
 function handleMarketDiscovery(d,ws){
   if(!REAL_DATA_ONLY || ws!==S.ws || S.feed!=='deriv') return false;
   if(S.marketRequest!==null && d.req_id===S.marketRequest){
@@ -161,17 +171,22 @@ function handleMarketDiscovery(d,ws){
       if($('feedStatus')) $('feedStatus').textContent='DATA: MARKET DISCOVERY FAILED';
       return true;
     }
-    const available=new Set(d.active_symbols.filter(s=>s && typeof s.symbol==='string' && s.is_trading_suspended!==1 && s.is_trading_suspended!==true).map(s=>s.symbol));
+    const available=new Set(d.active_symbols.filter(s=>s && typeof s.symbol==='string' && /^[A-Za-z0-9_.-]{1,64}$/.test(s.symbol) && !Object.hasOwn(Object.prototype,s.symbol) && s.is_trading_suspended!==1 && s.is_trading_suspended!==true).map(s=>s.symbol));
+    // Avoid interpolating untrusted display names in existing HTML templates.
+    for(const sym of available){
+      if(!SYMBOLS.some(s=>s.sym===sym)){
+        SYMBOLS.push({sym,name:sym,short:sym,pip:2,liveOnly:true});
+        S.ticks[sym]=[]; S.candles[sym]=[];
+      }
+    }
     S.activeMarkets=SYMBOLS.filter(s=>available.has(s.sym)).map(s=>s.sym);
     renderMarketSelectors();
     if(!S.activeMarkets.length){ logConn('No configured markets were reported active by Deriv.'); if($('feedStatus')) $('feedStatus').textContent='DATA: NO MATCHING MARKETS'; return true; }
-    S.activeMarkets.forEach(sym=>{
-      const req=++S.orderSeq; S.tickRequests[req]=sym;
-      try{ws.send(JSON.stringify({ticks:sym,subscribe:1,req_id:req}));}
-      catch(e){ delete S.tickRequests[req]; S.activeMarkets=S.activeMarkets.filter(s=>s!==sym); logConn(`Unable to subscribe to ${sym}.`); }
-    });
+    // Bound initial subscription load; all other symbols are available on demand.
+    S.activeMarkets.filter(sym=>SYMBOLS.find(s=>s.sym===sym && !s.liveOnly)).forEach(sym=>subscribeLiveSymbol(sym));
+    subscribeLiveSymbol(S.selected);
     renderMarketSelectors();
-    logConn(`Deriv reported ${S.activeMarkets.length} supported markets; waiting for ticks.`);
+    logConn(`Deriv reported ${S.activeMarkets.length} active markets; additional markets load ticks when selected.`);
     return true;
   }
   const symbol=S.tickRequests[d.req_id];
@@ -962,6 +977,7 @@ function startAutoTrader(){
   if(accountMode){
     if(!S.isDemo) return toast('Real-account bot execution is not available. Switch to a Deriv demo account.');
     if(REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes($('autoSymbol').value))) return toast('Wait for an available Deriv market before starting the bot.');
+    if(REAL_DATA_ONLY && !subscribeLiveSymbol($('autoSymbol').value)) return toast('Could not subscribe to the selected market.');
     if(S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !S.accountId || !Number.isFinite(S.balance) || S.balance<=0) return toast('Connect and authorize a demo account with a valid balance.');
     if(S.manualOrder || S.uncertainOrder || (Array.isArray(S.accountContracts) && S.accountContracts.some(c=>c.accountId===S.accountId && c.status==='OPEN'))) return toast('Resolve pending or locally tracked open account contracts before starting.');
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
@@ -1443,7 +1459,7 @@ function showView(v){
   if(v==='academy') renderCourses();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function selectSymbol(sym){ S.selected=sym; $('symbolSelect').value=sym; renderMainChart(); renderDigits(); updateProposal(); updatePriceChip(); }
+function selectSymbol(sym){ if(REAL_DATA_ONLY && S.feed==='deriv' && (!S.activeMarkets || !S.activeMarkets.includes(sym))) return toast('Market is unavailable.'); S.selected=sym; if(REAL_DATA_ONLY && S.feed==='deriv') subscribeLiveSymbol(sym); $('symbolSelect').value=sym; renderMainChart(); renderDigits(); updateProposal(); updatePriceChip(); }
 function changeTF(tf){ S.tf=+tf; buildCandles(S.selected,S.tf); renderMainChart(); }
 function changeChartType(t){ S.chartType=t; renderMainChart(); }
 
@@ -1655,5 +1671,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(localStorage.getItem('dbx_entered')==='1' || S.token){
     if($('loginGate')) $('loginGate').style.display='none';
   }
-  if(S.token){ connectDeriv(); }
+  if(S.token){ logConn('Restoring saved connection; waiting for Deriv authorization.'); connectDeriv(); }
 });
