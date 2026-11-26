@@ -48,4 +48,17 @@ for(const kind of ['new','legacy']){
  const h=harness();h.run("openNewDerivWS('wss://api.derivws.com/ws?otp=demo',{account_id:'VRTC1',account_type:'demo',currency:'USD',balance:1000})");const ws=h.sockets[0];ws.open();const req=ws.sent.find(x=>x.active_symbols).req_id;
  ws.message({req_id:req,error:{message:'unavailable'}});assert.equal(h.run('S.activeMarkets.length'),0);h.run('buyContract()');assert.equal(ws.sent.filter(x=>x.proposal).length,0);
 }
+// Current Deriv API schema returns underlying_symbol rather than symbol.
+{
+ const h=harness(); h.run("openNewDerivWS('wss://api.derivws.com/ws?otp=demo',{account_id:'VRTC1',account_type:'demo',currency:'USD',balance:1000})");
+ const ws=h.sockets[0]; ws.open(); const req=ws.sent.find(x=>x.active_symbols).req_id;
+ ws.message({req_id:req,active_symbols:[{underlying_symbol:'R_75',underlying_symbol_name:'Volatility 75 Index',is_trading_suspended:0},{underlying_symbol:'frxEURUSD',is_trading_suspended:0},{underlying_symbol:'R_50',is_trading_suspended:1},{underlying_symbol:'<script>',is_trading_suspended:0}]});
+ assert.equal(h.run("S.activeMarkets.includes('R_75')"),true);
+ assert.equal(h.run("S.activeMarkets.includes('frxEURUSD')"),true);
+ assert.equal(h.run("S.activeMarkets.includes('R_50')"),false);
+ assert.equal(h.run("S.activeMarkets.includes('<script>')"),false);
+ assert.ok(ws.sent.some(x=>x.ticks==='R_75'));
+ h.run("subscribeLiveSymbol('frxEURUSD')");
+ assert.ok(ws.sent.some(x=>x.ticks==='frxEURUSD'));
+}
 console.log('Live market discovery and unavailable-symbol handling checks passed');
