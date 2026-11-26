@@ -44,13 +44,13 @@ assert.equal(t.run('S.auto.running'),false);
 assert.match(t.get('toast').textContent,/historical contract prices/);
 assert.match(t.get('proposalBox').textContent,/Connect to Deriv/);
 t.get('contractType').value='DIGITEVEN';t.get('barrier').value='5';t.get('stake').value='1';t.get('duration').value='5';
-t.run("var sent=[]; S.connected=true; S.accountId='VRTC123'; S.ws={readyState:1,send:s=>sent.push(JSON.parse(s))}; buyContract()");
+t.run("var sent=[]; S.connected=true; S.activeMarkets=['R_75']; S.accountId='VRTC123'; S.ws={readyState:1,send:s=>sent.push(JSON.parse(s))}; buyContract()");
 assert.equal(t.run('sent[0].proposal'),1);
 assert.equal(t.run('sent.length'),1);
 console.log('Real-data-only production policy checks passed');
 // Production must never infer a digit from the bundled symbol precision.
 t=setup({});
-t.run("onTick=()=>{}; var ws={send(){}}; S.ws=ws; activateLiveFeed(ws); receiveDerivTick({symbol:'R_50',quote:320.123},ws)");
+t.run("onTick=()=>{}; var ws={send(){}}; S.ws=ws; activateLiveFeed(ws); handleMarketDiscovery({req_id:S.marketRequest,active_symbols:[{symbol:'R_50'}]},ws); receiveDerivTick({symbol:'R_50',quote:320.123},ws)");
 assert.equal(t.run("digitStats('R_50').n"),0);
 assert.equal(t.run("displayMarketPrice(320.123,'R_50')"),'320.123');
 assert.equal(t.run("autoDecision('R_50','even_odd',Array(60).fill(320.123))"),null);

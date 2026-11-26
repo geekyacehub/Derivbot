@@ -49,7 +49,7 @@ const savedAccountState=readAccountState();
 const S = {
   connected:false, ws:null, token:'', appId:'1089', balance:10000, currency:'USD', isDemo:true, accountName:'Demo',
   selected:'R_75', tf:60, chartType:'candles',
-  ticks:{}, tickCounts:{}, tickTimes:{}, precisionKnown:{}, candles:{}, history:{}, feed:'simulation', feedGeneration:0, simulationState:null, // per symbol arrays
+  ticks:{}, tickCounts:{}, tickTimes:{}, precisionKnown:{}, activeMarkets:null, marketRequest:null, tickRequests:{}, candles:{}, history:{}, feed:'simulation', feedGeneration:0, simulationState:null, // per symbol arrays
   openContracts:[], journal: readJournal(),
   bots: readLocalJSON('dbx_bots',null),
   builderBlocks:[], followers:[],
@@ -121,7 +121,11 @@ function activateLiveFeed(ws){
     S.feed='deriv'; S.feedGeneration++;
   }
   updateFeedUI();
-  SYMBOLS.forEach(s=>{ try{ws.send(JSON.stringify({ticks:s.sym,subscribe:1}));}catch(e){ logConn(`Unable to subscribe to ${s.sym}.`); } });
+  if(REAL_DATA_ONLY){
+    S.activeMarkets=null; S.tickRequests={}; S.marketRequest=++S.orderSeq;
+    try{ ws.send(JSON.stringify({active_symbols:'brief',req_id:S.marketRequest})); }
+    catch(e){ S.marketRequest=null; logConn('Could not request available markets; account orders are blocked until discovery succeeds.'); }
+  }else SYMBOLS.forEach(s=>{ try{ws.send(JSON.stringify({ticks:s.sym,subscribe:1}));}catch(e){ logConn(`Unable to subscribe to ${s.sym}.`); } });
 }
 function restoreSimulationFeed(){
   if(S.feed!=='deriv') return;
@@ -130,8 +134,57 @@ function restoreSimulationFeed(){
   S.ticks=saved.ticks; S.candles=saved.candles; S.tickCounts=saved.tickCounts;
   S.tickCount=saved.tickCount; S.balance=saved.balance; S.currency=saved.currency; S.equity=saved.equity;
   SYMBOLS.forEach((s,i)=>{s.pip=saved.precisions[i];});
-  S.simulationState=null; S.feed='simulation'; S.feedGeneration++;
+  S.simulationState=null; S.feed='simulation'; S.feedGeneration++; S.activeMarkets=null; S.marketRequest=null; S.tickRequests={};
+  if(REAL_DATA_ONLY) renderMarketSelectors();
   updateFeedUI();
+}
+// Only offer the configured instruments Deriv currently reports as active.
+function renderMarketSelectors(){
+  const supported=S.feed==='deriv' && Array.isArray(S.activeMarkets)?SYMBOLS.filter(s=>S.activeMarkets.includes(s.sym)):SYMBOLS;
+  const options=supported.map(s=>`<option value="${s.sym}">${s.name} (${s.sym})</option>`).join('');
+  for(const id of ['symbolSelect','builderSymbol','autoSymbol','btSymbol']){
+    const el=$(id); if(!el) continue;
+    const old=id==='symbolSelect'?S.selected:el.value;
+    el.innerHTML=options;
+    if(supported.some(s=>s.sym===old)) el.value=old;
+    else if(supported.length) el.value=supported[0].sym;
+  }
+  if(supported.length && !supported.some(s=>s.sym===S.selected)) S.selected=supported[0].sym;
+}
+function handleMarketDiscovery(d,ws){
+  if(!REAL_DATA_ONLY || ws!==S.ws || S.feed!=='deriv') return false;
+  if(S.marketRequest!==null && d.req_id===S.marketRequest){
+    S.marketRequest=null;
+    if(d.error || !Array.isArray(d.active_symbols)){
+      S.activeMarkets=[]; renderMarketSelectors();
+      logConn('Unable to verify Deriv markets. Reconnect to retry; account orders are blocked.');
+      if($('feedStatus')) $('feedStatus').textContent='DATA: MARKET DISCOVERY FAILED';
+      return true;
+    }
+    const available=new Set(d.active_symbols.filter(s=>s && typeof s.symbol==='string' && s.is_trading_suspended!==1 && s.is_trading_suspended!==true).map(s=>s.symbol));
+    S.activeMarkets=SYMBOLS.filter(s=>available.has(s.sym)).map(s=>s.sym);
+    renderMarketSelectors();
+    if(!S.activeMarkets.length){ logConn('No configured markets were reported active by Deriv.'); if($('feedStatus')) $('feedStatus').textContent='DATA: NO MATCHING MARKETS'; return true; }
+    S.activeMarkets.forEach(sym=>{
+      const req=++S.orderSeq; S.tickRequests[req]=sym;
+      try{ws.send(JSON.stringify({ticks:sym,subscribe:1,req_id:req}));}
+      catch(e){ delete S.tickRequests[req]; S.activeMarkets=S.activeMarkets.filter(s=>s!==sym); logConn(`Unable to subscribe to ${sym}.`); }
+    });
+    renderMarketSelectors();
+    logConn(`Deriv reported ${S.activeMarkets.length} supported markets; waiting for ticks.`);
+    return true;
+  }
+  const symbol=S.tickRequests[d.req_id];
+  if(symbol && d.error){
+    delete S.tickRequests[d.req_id]; S.activeMarkets=S.activeMarkets.filter(s=>s!==symbol);
+    if(S.manualOrder && S.manualOrder.phase==='proposal' && S.manualOrder.symbol===symbol) failManualOrder('Market subscription failed; no purchase sent.');
+    if(S.auto.running && S.auto.mode==='account' && S.auto.symbol===symbol){ autoLog(`Market ${symbol} is unavailable; stopping the bot.`, 'warn'); stopAutoTrader(); }
+    S.ticks[symbol]=[]; S.candles[symbol]=[]; delete S.precisionKnown[symbol]; delete S.tickTimes[symbol];
+    renderMarketSelectors(); updatePriceChip();
+    logConn(`Deriv rejected the ${symbol} tick subscription. That market is unavailable in this session.`);
+    return true;
+  }
+  return false;
 }
 function updateFeedUI(){
   if($('feedStatus')) $('feedStatus').textContent=S.feed==='deriv'?'DATA: DERIV LIVE (awaiting subscribed ticks)':(REAL_DATA_ONLY?'DATA: DISCONNECTED':'DATA: SIMULATED');
@@ -144,7 +197,7 @@ function updateFeedUI(){
   ['mainChart','heroChart','distChart','aiDistChart','btChart'].forEach(id=>{ const cv=$(id); if(cv && cv.getContext){ const ctx=cv.getContext('2d'); if(ctx) ctx.clearRect(0,0,cv.width,cv.height); } });
 }
 function receiveDerivTick(tick,ws){
-  if(ws!==S.ws || S.feed!=='deriv' || !tick || !SYMBOLS.some(s=>s.sym===tick.symbol)) return;
+  if(ws!==S.ws || S.feed!=='deriv' || !tick || !SYMBOLS.some(s=>s.sym===tick.symbol) || (REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(tick.symbol)))) return;
   const quote=Number(tick.quote); if(!Number.isFinite(quote) || quote<=0) return;
   const sym=tick.symbol, meta=SYMBOLS.find(s=>s.sym===sym);
   if(Number.isInteger(tick.pip_size) && tick.pip_size>=0 && tick.pip_size<=10){
@@ -182,6 +235,34 @@ function isTrustedDerivSocketURL(value){
   try{ const url=new URL(value); return url.protocol==='wss:' && !url.username && !url.password && !url.port && (url.hostname==='derivws.com' || url.hostname.endsWith('.derivws.com')); }catch(e){ return false; }
 }
 function derivURL(ep){ return `${ep||DERIV_ENDPOINTS[0]}?app_id=${encodeURIComponent(S.appId||'1089')}`; }
+// Optional reconnect survives reload in this tab, not an explicit disconnect.
+// Session storage is readable by scripts/extensions with access to this origin.
+const SESSION_TOKEN_KEY='dbx_tab_connection';
+function clearTabConnection(){ try{sessionStorage.removeItem(SESSION_TOKEN_KEY); return true;}catch(e){return false;} }
+function saveTabConnection(){
+  if(!$('rememberTab') || !$('rememberTab').checked){ clearTabConnection(); return; }
+  if(!S.connected || !S.token) return;
+  try{ sessionStorage.setItem(SESSION_TOKEN_KEY,JSON.stringify({token:S.token,isDemo:S.isDemo})); }
+  catch(e){ $('rememberTab').checked=false; toast('Tab storage is unavailable; reconnect after refresh.'); }
+}
+function restoreTabConnection(){
+  try{
+    const raw=sessionStorage.getItem(SESSION_TOKEN_KEY); if(!raw) return;
+    const saved=JSON.parse(raw);
+    if(!saved || typeof saved.token!=='string' || !saved.token || typeof saved.isDemo!=='boolean'){ clearTabConnection(); return; }
+    if(S.token){ clearTabConnection(); return; } // OAuth callback takes precedence.
+    S.token=saved.token; S.isDemo=saved.isDemo;
+    if($('rememberTab')) $('rememberTab').checked=true;
+    return true;
+  }catch(e){ clearTabConnection(); }
+}
+function updateTabReconnect(){
+  if(!$('rememberTab').checked){
+    if(!clearTabConnection()){ $('rememberTab').checked=true; return toast('Could not clear tab storage. Close this tab or clear site data.'); }
+    return;
+  }
+  if(S.connected) saveTabConnection();
+}
 let _epIdx=0, _connTimer=null, _connectionGeneration=0;
 async function connectDeriv(){
   if(S.openContracts.length) return toast('Wait for simulated contracts to settle before connecting.');
@@ -190,12 +271,13 @@ async function connectDeriv(){
   const generation=++_connectionGeneration;
   const appId = $('appIdInput').value.trim()||'1089';
   const token = $('tokenInput').value.trim()||S.token;
+  if(S.token && token!==S.token) clearTabConnection();
   S.appId=appId; S.token=token; $('tokenInput').value='';
   try{localStorage.setItem('dbx_appid',appId); localStorage.removeItem('dbx_token');}catch(e){}
   _epIdx=0;
   // Try new Deriv API (api.derivws.com) first
   if(token){
-    logConn(`Connecting to new Deriv API (api.derivws.com) app_id=${appId}…`);
+    logConn('Connecting to Deriv API…');
     try{
       const headers={'Authorization':`Bearer ${token}`,'Content-Type':'application/json'};
       if(appId && appId!=='1089') headers['Deriv-App-ID']=appId;
@@ -237,7 +319,7 @@ function openNewDerivWS(wsUrl, acc){
     activateLiveFeed(ws);
     S.connected=true; S.balance=acc.balance==null?NaN:Number(acc.balance); S.currency=acc.currency||'USD';
     S.isDemo=isVerifiedDemoAccount(acc); S.accountId=String(acc.account_id||acc.loginid||acc.id||''); S.accountName=S.accountId||'Deriv';
-    updateConnUI(); resumeAccountTracking(ws);
+    updateConnUI(); resumeAccountTracking(ws); saveTabConnection();
     logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
     toast(`Connected to Deriv — ${S.currency} ${fmt(S.balance)}`);
     try{ ws.send(JSON.stringify({balance:1, subscribe:1})); ws.send(JSON.stringify({profit_table:1, description:1, limit:25})); }catch(e){}
@@ -245,12 +327,13 @@ function openNewDerivWS(wsUrl, acc){
   ws.onmessage=(ev)=>{
     if(S.ws!==ws) return;
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
+    const marketHandled=handleMarketDiscovery(d,ws);
     if(d.tick) receiveDerivTick(d.tick,ws);
     if(d.balance){ const newBal=Number(d.balance.balance); if(Number.isFinite(newBal)){ S.balance=newBal; updateConnUI(); } }
     handleManualOrderMessage(d, ws);
     handleAccountContractMessage(d,ws);
     // Account settlement is not yet reconciled into simulator statistics.
-    if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
+    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
   };
   ws.onclose=(ev)=>{ if(S.ws!==ws) return; if(S.auto.running && S.auto.mode==='account') stopAutoTrader(); failManualOrder('Connection closed; check your Deriv account before placing another order.'); logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); };
   ws.onerror=()=>{ logConn('WebSocket error.'); };
@@ -259,7 +342,7 @@ function tryConnect(token){
   try{ if(S.ws) S.ws.close(); }catch(e){}
   clearTimeout(_connTimer);
   const ep=DERIV_ENDPOINTS[_epIdx];
-  logConn(`Connecting to Deriv API (${ep}) app_id=${S.appId}…`);
+  logConn('Connecting to Deriv WebSocket API…');
   let authorized=false;
   let ws; try{ ws=new WebSocket(derivURL(ep)); }catch(e){ logConn('⚠️ WebSocket not supported in this browser.'); return; }
   S.ws=ws;
@@ -275,10 +358,11 @@ function tryConnect(token){
   ws.onmessage=(ev)=>{
     if(S.ws!==ws) return;
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
+    const marketHandled=handleMarketDiscovery(d,ws);
     if(d.tick) receiveDerivTick(d.tick,ws);
     if(d.active_symbols){ logConn(`Received ${d.active_symbols.length} active symbols from Deriv.`); }
-    if(d.authorize && d.req_id===3 && !authorized){ authorized=true; activateLiveFeed(ws); S.connected=true; S.balance=+d.authorize.balance; S.currency=d.authorize.currency; S.isDemo=isVerifiedDemoAccount(d.authorize); S.accountId=String(d.authorize.loginid||''); S.accountName=S.accountId||'Deriv'; updateConnUI(); resumeAccountTracking(ws); try{ws.send(JSON.stringify({balance:1,subscribe:1}));}catch(e){} logConn(`✅ Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'} account)`); toast('Connected to Deriv — balance '+fmt(S.balance)); fetchPortfolio(); }
-    if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
+    if(d.authorize && d.req_id===3 && !authorized){ authorized=true; activateLiveFeed(ws); S.connected=true; S.balance=+d.authorize.balance; S.currency=d.authorize.currency; S.isDemo=isVerifiedDemoAccount(d.authorize); S.accountId=String(d.authorize.loginid||''); S.accountName=S.accountId||'Deriv'; updateConnUI(); resumeAccountTracking(ws); saveTabConnection(); try{ws.send(JSON.stringify({balance:1,subscribe:1}));}catch(e){} logConn(`✅ Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'} account)`); toast('Connected to Deriv — balance '+fmt(S.balance)); fetchPortfolio(); }
+    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
     if(d.balance){ const newBal=Number(d.balance.balance); if(Number.isFinite(newBal)){ S.balance=newBal; updateConnUI(); } }
     handleManualOrderMessage(d, ws);
     handleAccountContractMessage(d,ws);
@@ -298,9 +382,10 @@ function tryConnect(token){
   };
   ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
-function disconnectDeriv(options={}){ ++_connectionGeneration; clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; if(!options.preserveToken){ S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast('Disconnected from Deriv'); }
+function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
 function switchAccountMode(mode){
   if(S.connected || S.ws) disconnectDeriv({preserveToken:true});
+  if(S.isDemo!==(mode==='demo')) clearTabConnection();
   S.isDemo=(mode==='demo');
   localStorage.setItem('dbx_isdemo', S.isDemo?'1':'0');
   if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm';
@@ -527,6 +612,7 @@ function buyContract(){
   if(REAL_DATA_ONLY && !S.connected) return toast('Connect to Deriv to request an account quote.');
   if(!Number.isFinite(p.stake) || p.stake<=0 || !Number.isInteger(p.dur) || p.dur<1 || !Number.isInteger(p.barrier) || p.barrier<0 || p.barrier>9) return toast('Enter a positive stake, whole-number duration and barrier from 0 to 9.');
   if(S.connected){
+    if(REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(S.selected))) return toast('Wait for an available Deriv market before requesting a quote.');
     if(S.auto.running && S.auto.mode==='account') return toast('Stop the account bot before placing a manual order.');
     if(!S.ws || S.ws.readyState!==1) return toast('Connection unavailable; no order was sent.');
     if(S.manualOrder || S.uncertainOrder) return toast('Review the pending or uncertain order before trading again.');
@@ -858,6 +944,7 @@ function startAutoTrader(){
   const accountMode=S.connected;
   if(accountMode){
     if(!S.isDemo) return toast('Real-account bot execution is not available. Switch to a Deriv demo account.');
+    if(REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes($('autoSymbol').value))) return toast('Wait for an available Deriv market before starting the bot.');
     if(S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !S.accountId || !Number.isFinite(S.balance) || S.balance<=0) return toast('Connect and authorize a demo account with a valid balance.');
     if(S.manualOrder || S.uncertainOrder || (Array.isArray(S.accountContracts) && S.accountContracts.some(c=>c.accountId===S.accountId && c.status==='OPEN'))) return toast('Resolve pending or locally tracked open account contracts before starting.');
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
@@ -1346,7 +1433,8 @@ function changeChartType(t){ S.chartType=t; renderMainChart(); }
 /* ================= RENDER: MARKET ================= */
 function renderWatchlist(filter=''){
   const grid=$('watchlistGrid'); if(!grid) return;
-  const list=SYMBOLS.filter(s=>!filter||s.name.toLowerCase().includes(filter.toLowerCase())||s.sym.toLowerCase().includes(filter.toLowerCase()));
+  const visible=REAL_DATA_ONLY && S.feed==='deriv' && Array.isArray(S.activeMarkets)?SYMBOLS.filter(s=>S.activeMarkets.includes(s.sym)):SYMBOLS;
+  const list=visible.filter(s=>!filter||s.name.toLowerCase().includes(filter.toLowerCase())||s.sym.toLowerCase().includes(filter.toLowerCase()));
   grid.innerHTML=list.map(s=>{
     const ticks=S.ticks[s.sym]||[]; const last=ticks[ticks.length-1]; if(last==null) return `<div class="sym-card"><div class="name">${s.name}</div><div class="muted">Waiting for tick</div></div>`; const prev=ticks[ticks.length-11]||last; const chg=(last-prev)/prev*100;
     return `<button class="sym-card ${S.selected===s.sym?'sel':''}" onclick="selectSymbol('${s.sym}')"><div style="display:flex;justify-content:space-between"><span class="name">${s.name}</span><span class="sym">${s.sym}</span></div><div class="price">${displayMarketPrice(last,s.sym)}</div><div class="chg ${chg>=0?'up':'down'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}% · Digit ${REAL_DATA_ONLY && S.feed==='deriv' && S.precisionKnown[s.sym]===undefined?'unavailable':lastDigit(last,s.sym)}</div><canvas data-spark="${s.sym}" height="36"></canvas></button>`;
@@ -1355,7 +1443,8 @@ function renderWatchlist(filter=''){
 }
 function renderSnapshot(){
   const grid=$('snapshotGrid'); if(!grid) return;
-  grid.innerHTML=SYMBOLS.slice(0,8).map(s=>{
+  const visible=REAL_DATA_ONLY && S.feed==='deriv' && Array.isArray(S.activeMarkets)?SYMBOLS.filter(s=>S.activeMarkets.includes(s.sym)):SYMBOLS;
+  grid.innerHTML=visible.slice(0,8).map(s=>{
     const ticks=S.ticks[s.sym]||[]; const last=ticks[ticks.length-1]; if(last==null) return `<div class="sym-card"><div class="name">${s.name}</div><div class="muted">Waiting for tick</div></div>`; const prev=ticks[ticks.length-11]||last; const chg=(last-prev)/prev*100;
     return `<button class="sym-card ${S.selected===s.sym?'sel':''}" onclick="selectSymbol('${s.sym}');showView('markets')"><div class="name">${s.name}</div><div class="price">${displayMarketPrice(last,s.sym)}</div><div class="chg ${chg>=0?'up':'down'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}%</div></button>`;
   }).join('');
@@ -1480,7 +1569,9 @@ function init(){
   if(REAL_DATA_ONLY){ SYMBOLS.forEach(s=>{S.ticks[s.sym]=[]; S.candles[s.sym]=[];}); updateFeedUI(); } else initMock();
   // restore
   const savedApp=localStorage.getItem('dbx_appid'); if(savedApp){ $('appIdInput').value=savedApp; S.appId=savedApp; }
-  const savedDemo=localStorage.getItem('dbx_isdemo'); if(savedDemo!==null){ S.isDemo=(savedDemo==='1'); if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm'; if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm'; }
+  const savedDemo=localStorage.getItem('dbx_isdemo'); if(savedDemo!==null) S.isDemo=(savedDemo==='1');
+  restoreTabConnection();
+  if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm'; if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm';
   const oauthURL=`https://app.deriv.com/oauth2/authorize?app_id=${S.appId}&redirect_uri=${encodeURIComponent(location.origin+location.pathname)}&scope=trade,accounts_read`;
   if($('oauthLink')) $('oauthLink').href=oauthURL;
   if($('gateOAuthBtn')) $('gateOAuthBtn').href=oauthURL;
