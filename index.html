@@ -361,11 +361,13 @@
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><h4>Connect account</h4><span class="badge">Official Deriv API</span></div>
-          <p class="muted small">Tokens stay in memory until disconnect or reload.</p>
+          <p class="muted small">Tokens stay in memory by default.</p>
           <label class="lbl">Deriv App ID</label>
           <input class="input full mono" id="appIdInput" value="1089">
           <label class="lbl">Deriv API Token (from app.deriv.com → API Token)</label>
           <input class="input full mono" id="tokenInput" type="password" placeholder="Paste your Deriv API token here…">
+          <label class="check reconnect-option"><input type="checkbox" id="rememberTab" onchange="updateTabReconnect()"> Reconnect after refresh in this tab</label>
+          <p class="muted small">Stores your token in tab session storage. Scripts or extensions may access it; disconnect to clear it.</p>
           <div class="btn-row">
             <button class="btn btn-red btn-lg" onclick="connectDeriv()">Connect & authorize</button>
             <button class="btn btn-outline" onclick="disconnectDeriv()">Disconnect</button>

@@ -273,3 +273,4 @@ body{background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--txt
 .text-link{color:#ff8a91}.empty-icon,.quick-icon.violet{background:rgba(255,68,79,.14);color:#ff8a91}.quick-icon{background:rgba(0,208,156,.13);color:#60dfbc}
 .chart-stage{border-color:#1c2c42;background:repeating-linear-gradient(to bottom,transparent 0,transparent 51px,#1b2a3c 52px)}.chart-empty{background:linear-gradient(90deg,rgba(14,22,34,.1),rgba(14,22,34,.7),rgba(14,22,34,.1))}.market-metrics div,.quick-action,.dashboard-bottom .ou-row{border-color:#1c2c42}
 .toast{background:#16233a;border-color:#263b54}.hamburger{background:#111e2e;border-color:#1c2c42}.footer{border-color:#1c2c42}
+.reconnect-option{margin:14px 0 6px;font-size:12px}

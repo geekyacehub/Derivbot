@@ -64,7 +64,7 @@ The app works **immediately in demo mode** — a simulated Deriv feed streams li
 2. Go to **API Token** and create a token (tick *Trade* + *Accounts read*)
 3. Open the app → **Connect Deriv** → paste your App ID (default `1089`) and token → **Connect & Authorize**
 
-Your token is kept in page memory and cleared on explicit disconnect or reload. Enter it again to reconnect after a reload. The app may send it to Deriv's account REST API or to its WebSocket authorization endpoint. Browser extensions and scripts running in the page can still access in-memory credentials. Previously saved `dbx_token` values are removed on initialization where browser storage is available.
+Your token is kept in page memory by default. To reconnect after a refresh, opt into “Reconnect after refresh in this tab”; an authorized token is stored in browser session storage until disconnect or the browser ends the tab session. Browser session restore or tab duplication may preserve or copy session storage. Scripts and extensions with access to the origin can read it. Disconnect clears the token where storage is available. The app may send it to Deriv's account REST API or to its WebSocket authorization endpoint. Browser extensions and scripts running in the page can still access in-memory credentials. Previously saved `dbx_token` values are removed on initialization where browser storage is available.
 
 You can also use **Continue with Deriv (OAuth)** — the link on the Connect page opens Deriv's secure authorization flow.
 
@@ -109,7 +109,7 @@ Alternatives: GitHub Pages (Settings → Pages → deploy from branch), Netlify,
 
 ## Tests
 
-Run `node tests/safety.test.cjs`, `node tests/websocket.test.cjs` and `node tests/credentials.test.cjs` and `node tests/storage.test.cjs` for mocked safety, bot, market-data and WebSocket lifecycle checks. These tests do not connect to Deriv or certify account trading.
+Run `node tests/safety.test.cjs`, `node tests/websocket.test.cjs` and `node tests/credentials.test.cjs` and `node tests/storage.test.cjs`, and `node tests/markets.test.cjs` for mocked safety, bot, market-data and WebSocket lifecycle checks. These tests do not connect to Deriv or certify account trading.
 
 ## Bot simulator updates
 
@@ -136,3 +136,5 @@ Bot settings can be exported and imported as JSON on the Connect page. The expor
 ### Public Deriv connectivity smoke test
 
 With Node.js 22 or later and network access to Deriv, run `node scripts/check-deriv-public.cjs`. Set `DERIV_APP_ID` and optionally `DERIV_SYMBOL` as environment variables if needed. The test subscribes to one public tick, reports its quote and precision metadata, and sends no credentials or orders. It does **not** test authorization, buying, settlement, or the app's full integration. The sandbox used for development could not connect to Deriv, so a successful live run remains outstanding.
+
+When connected, the app requests Deriv’s active-symbol list and subscribes only to configured markets returned by the service. A failed discovery blocks account quotes and can be retried by reconnecting. Subscription failures remove the affected market for that session; reconnect to retry. API behavior still requires live verification.
