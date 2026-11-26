@@ -1,10 +1,16 @@
-# DerivBot Pro X — 100% FREE All-in-One Deriv Trading Platform
+> **Current production policy:** The interface does not generate mock ticks or simulated orders. Connect Deriv for market data and account quotes. Backtesting, simulation journal, copy trading and placeholder academy are unavailable in the interface. The simulator and replay code remain for isolated tests only. Market indicators and predictions are calculations, not verified forecasts; charts group ticks, not time candles. Real-account manual trading and demo-account automation remain experimental and have not been tested against Deriv. The descriptions below may refer to the retained test engine rather than available UI features.
+
+# DerivBot Pro X — experimental simulator
+
+> **Safety review:** Experimental bot execution is available on verified Deriv demo accounts after explicit confirmation. Real-account bot execution remains unavailable. Manual account orders require quote confirmation. Neither account path has been tested against Deriv; local bot limits only cover the current browser session, not the whole account. Credential sync links and follower-token entry remain disabled. See [AUDIT.md](./AUDIT.md). Revoke tokens exposed through old sync links.
+
+The descriptions below are legacy feature claims and should not be treated as verified functionality.
 
 **TraderScheme × Expert Analysis Tool × ProCortex — combined, with ×10 features.**
 
-🎉 **All features are free for personal use. No paid plans, no subscriptions, no paywalls, no locked features.** Every bot, signal, AI tool, auto-trader, copy-trading slot, backtest and course is unlocked from day one.
+🎉 **All features are free for personal use. No paid plans, no subscriptions, no paywalls, no locked features.** Some features are experimental or incomplete; copy trading is not implemented and academy lessons are placeholders.
 
-One workspace that connects to **your own Deriv account** and gives you live digit signals, AI predictions, 12 bots, a visual bot builder, a 96-indicator auto-trader, copy trading, a backtester, a risk manager, a trading journal, and a 30-chapter academy.
+One workspace that connects to **your own Deriv account** and gives you live digit signals, AI predictions, experimental bots, a visual bot builder, a demo-account auto-trader, a backtester, a risk manager, a trading journal, and a 30-chapter academy.
 
 > ⚠️ Trading involves risk of loss. This is a third-party tool, not affiliated with Deriv Ltd. Past performance and displayed win rates do not guarantee future results. Never trade money you cannot afford to lose.
 
@@ -24,7 +30,7 @@ One workspace that connects to **your own Deriv account** and gives you live dig
 2. **Transition Matrix** — P(next digit | current digit) heatmap
 3. **D-Circles** — visual digit frequency distribution
 4. **Streak & Gap counters** — hot/cold digits, current streaks
-5. **Backtester** — test any bot on 1,000 historical ticks with drawdown
+5. **Backtester** — replay supported strategies on available local ticks, with illustrative payout and drawdown
 6. **Risk Manager** — daily loss limit, max stake %, Kelly position sizing, equity curve
 7. **AI Prediction Engine** — Markov + frequency model, runs in-browser, calibration log
 8. **Speedbot mode** — reacts every tick with confidence gating
@@ -58,7 +64,7 @@ The app works **immediately in demo mode** — a simulated Deriv feed streams li
 2. Go to **API Token** and create a token (tick *Trade* + *Accounts read*)
 3. Open the app → **Connect Deriv** → paste your App ID (default `1089`) and token → **Connect & Authorize**
 
-Your token is stored only in your browser (`localStorage`) and sent only to Deriv's official WebSocket API (`wss://ws.derivws.com/websockets/v3`). We never see your password.
+Your token is kept in page memory and cleared on explicit disconnect or reload. Enter it again to reconnect after a reload. The app may send it to Deriv's account REST API or to its WebSocket authorization endpoint. Browser extensions and scripts running in the page can still access in-memory credentials. Previously saved `dbx_token` values are removed on initialization where browser storage is available.
 
 You can also use **Continue with Deriv (OAuth)** — the link on the Connect page opens Deriv's secure authorization flow.
 
@@ -100,3 +106,33 @@ Alternatives: GitHub Pages (Settings → Pages → deploy from branch), Netlify,
 - Endpoint: `wss://ws.derivws.com/websockets/v3?app_id=1089`
 - Public app_id `1089` works for the live feed; create your own app at [api.deriv.com](https://api.deriv.com) for production.
 - Supported calls: `ticks` (subscribe), `active_symbols`, `authorize`, `proposal`, `buy`, `portfolio`.
+
+## Tests
+
+Run `node tests/safety.test.cjs`, `node tests/websocket.test.cjs` and `node tests/credentials.test.cjs` and `node tests/storage.test.cjs` for mocked safety, bot, market-data and WebSocket lifecycle checks. These tests do not connect to Deriv or certify account trading.
+
+## Bot simulator updates
+
+MACD crossover, Bollinger squeeze, cold-digit Differs, Over 1/Under 8 and parity-streak reversal use distinct experimental decision rules. The builder applies its RSI, Martingale and three-loss-stop blocks in simulation and replay. Presets that share a scan are labeled; unfinished strategies cannot silently execute another strategy. Scores and simulated payouts are not evidence of profitability. Real-account automated trading remains unavailable; verified demo accounts can use the experimental bot flow after confirmation.
+
+Fibonacci, Oscar-style cycle and three-win Paroli sizing are available in the simulator and replay. Each uses the frequency-scan entry signal; the sizing policies do not guarantee recovery. Replay shows the first 30 simulated trades and why it stopped. An optional chronological comparison independently replays each half with its own 100-tick warm-up and fresh balance; it does not tune parameters or prove an edge.
+
+The experimental Digit Transition Ensemble blends recent digit parity with transitions and uses RSI as a filter. One-Tick Momentum uses one-tick simulated contracts and defaults to the Volatility 100 (1s) symbol. Replay respects each strategy’s duration. The local mock feed is not a real-time 1-second feed, model scores are not calibrated probabilities, and neither strategy has been validated for trading.
+
+## Prediction evaluation
+
+The experimental digit model logs at most one prediction per observed symbol tick and resolves it on the next accepted tick for that symbol. Pending predictions expire across feed changes or reloads. The evaluation view separates simulated and Deriv data and reports hit rate and multiclass Brier score for up to 200 recent log entries. Scores are uncalibrated model outputs, not guarantees; live tick ordering has not been integration-tested.
+
+The experimental multi-market scanner compares observed Over 1 and Under 8 frequencies across the simulator’s markets. Replay requires aligned mock buffers and does not support multi-market live-feed history. Frequency rankings do not account for contract prices and are not evidence of an edge.
+
+The Half-Kelly Simulator uses half of the Kelly fraction from an uncalibrated historical strategy score and the simulator’s fixed hypothetical payout. The base stake is a cap and other simulation guards still apply. It is not based on Deriv quotes, does not establish a positive expected return, and is not suitable for account trading.
+
+## Experimental Deriv demo bot
+
+Connect a verified Deriv demo account, select a supported strategy and review the confirmation before starting. The bot requests a quote, places at most one account contract at a time, and waits for settlement. Stop cannot cancel a submitted or open contract. Session limits do not include activity outside this browser; multi-market and half-Kelly modes are simulator-only. This path has only mocked tests and has not been tested against Deriv. Check the official account history.
+
+Bot settings can be exported and imported as JSON on the Connect page. The export deliberately excludes token and order fields; review configuration names and contents before sharing. Old credential-bearing sync links should be treated as compromised.
+
+### Public Deriv connectivity smoke test
+
+With Node.js 22 or later and network access to Deriv, run `node scripts/check-deriv-public.cjs`. Set `DERIV_APP_ID` and optionally `DERIV_SYMBOL` as environment variables if needed. The test subscribes to one public tick, reports its quote and precision metadata, and sends no credentials or orders. It does **not** test authorization, buying, settlement, or the app's full integration. The sandbox used for development could not connect to Deriv, so a successful live run remains outstanding.

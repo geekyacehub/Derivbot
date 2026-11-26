@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>DerivBot Pro X — Deriv Trading Terminal</title>
 <meta name="description" content="DerivBot Pro X — Live Deriv tick streaming, digit analysis, AI signals, automated bots, copy trading, backtester & risk manager.">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23ff444f'/%3E%3Cstop offset='100%25' stop-color='%23ff7a3d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M32 14L50 32L32 50L14 32Z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23fff'/%3E%3C/svg%3E">
@@ -12,7 +13,7 @@
 </head>
 <body>
 <!-- LOGIN GATE -->
-<div id="loginGate" style="position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at top,#1a1f2e,#0b0e14);display:flex;align-items:center;justify-content:center;padding:20px">
+<div id="loginGate" style="position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at top,#1a1f2e,#0b0e14);display:none;align-items:center;justify-content:center;padding:20px">
   <div style="width:100%;max-width:420px;background:#131722;border:1px solid #262d3d;border-radius:16px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.6);text-align:center">
     <div style="font-size:36px;margin-bottom:8px">◈</div>
     <h2 style="margin:0 0 6px;font-size:24px">DerivBot <span style="color:#ff444f">Pro X</span></h2>
@@ -21,7 +22,7 @@
     <div style="color:#5c6b7f;font-size:12px;margin:14px 0">— or paste your Deriv API Token —</div>
     <input class="input full mono" id="gateTokenInput" type="password" placeholder="Paste Deriv API Token…" style="margin-bottom:10px">
     <button class="btn btn-outline btn-block" onclick="loginWithToken()" style="margin-bottom:14px">🔌 Connect & Enter Terminal</button>
-    <button class="btn btn-ghost btn-sm btn-block" onclick="enterDemoMode()">Continue in Demo Mode →</button>
+    <button class="btn btn-ghost btn-sm btn-block" onclick="enterDemoMode()">Continue without connecting →</button>
   </div>
 </div>
 
@@ -37,39 +38,39 @@
     </div>
 
     <div class="conn-card" id="connCard">
-      <div class="conn-row"><span class="dot" id="connDot"></span><span id="connLabel">Demo Mode</span><span class="conn-badge" id="connBadge">DEMO</span></div>
-      <div class="conn-balance" id="connBalance">$10,000.00 <small>USD · Demo</small></div>
+      <div class="conn-row"><span class="dot" id="connDot"></span><span id="connLabel">Disconnected</span><span class="conn-badge" id="connBadge">OFFLINE</span></div>
+      <div class="conn-balance" id="connBalance">Balance unavailable</div>
       <div class="btn-row" style="margin:6px 0 8px;gap:6px">
         <button class="btn btn-outline btn-sm" id="btnDemoAcc" onclick="switchAccountMode('demo')" style="flex:1;padding:4px 6px;font-size:11px">Demo</button>
         <button class="btn btn-ghost btn-sm" id="btnRealAcc" onclick="switchAccountMode('real')" style="flex:1;padding:4px 6px;font-size:11px">Real</button>
       </div>
       <div class="conn-sub" id="connSub">Connect your Deriv API token to trade live.</div>
-      <a class="btn btn-red btn-sm btn-block" id="sideLoginBtn" href="https://app.deriv.com/oauth2/authorize?app_id=1089" target="_blank" rel="noopener" style="text-align:center">⚡ Login with Deriv</a>
+      <button class="btn btn-red btn-sm btn-block" id="sideLoginBtn" onclick="showView('connect')">Connect account</button>
     </div>
 
     <nav class="nav" id="mainNav">
       <div class="nav-label">TERMINAL</div>
-      <button class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span>▦</span> Dashboard</button>
-      <button class="nav-item" data-view="markets" onclick="showView('markets')"><span>↗</span> Market Monitor <em class="pill">LIVE</em></button>
-      <button class="nav-item" data-view="digits" onclick="showView('digits')"><span>◉</span> Digit Analysis</button>
-      <button class="nav-item" data-view="signals" onclick="showView('signals')"><span>⚡</span> Live Signals <em class="pill red" id="signalPill">0</em></button>
+      <button class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span> Overview</button>
+      <button class="nav-item" data-view="markets" onclick="showView('markets')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/></svg></span> Market Monitor <em class="pill">LIVE</em></button>
+      <button class="nav-item" data-view="digits" onclick="showView('digits')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span> Digit Analysis</button>
+      <button class="nav-item" data-view="signals" onclick="showView('signals')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span> Observed Frequencies <em class="pill red" id="signalPill">0</em></button>
 
-      <div class="nav-label">TRADE & AUTOMATE</div>
-      <button class="nav-item" data-view="trade" onclick="showView('trade')"><span>⇄</span> Manual Trade</button>
-      <button class="nav-item" data-view="bots" onclick="showView('bots')"><span>🤖</span> Bot Library <em class="pill">24</em></button>
-      <button class="nav-item" data-view="builder" onclick="showView('builder')"><span>🧩</span> Bot Builder</button>
-      <button class="nav-item" data-view="autotrader" onclick="showView('autotrader')"><span>▶</span> Auto-Trader <em class="pill green" id="autoPill">OFF</em></button>
-      <button class="nav-item" data-view="copy" onclick="showView('copy')"><span>⧉</span> Copy Trading</button>
+      <div class="nav-label">TRADING</div>
+      <button class="nav-item" data-view="trade" onclick="showView('trade')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/></svg></span> Manual Trade</button>
+      <button class="nav-item" data-view="bots" onclick="showView('bots')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M8 13h.01M16 13h.01M9 16h6"/></svg></span> Bot Library </button>
+      <button class="nav-item" data-view="builder" onclick="showView('builder')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><rect x="5" y="5" width="14" height="14" rx="3"/></svg></span> Bot Builder</button>
+      <button class="nav-item" data-view="autotrader" onclick="showView('autotrader')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></svg></span> Auto-Trader <em class="pill green" id="autoPill">OFF</em></button>
+      <button hidden style="display:none" class="nav-item" data-view="copy" onclick="showView('copy')"><span>⧉</span> Copy Trading</button>
 
-      <div class="nav-label">INTELLIGENCE ×10</div>
-      <button class="nav-item" data-view="ai" onclick="showView('ai')"><span>🧠</span> AI Prediction</button>
-      <button class="nav-item" data-view="backtest" onclick="showView('backtest')"><span>◐</span> Backtester</button>
-      <button class="nav-item" data-view="risk" onclick="showView('risk')"><span>🛡</span> Risk Manager</button>
-      <button class="nav-item" data-view="journal" onclick="showView('journal')"><span>▤</span> Trading Journal</button>
+      <div class="nav-label">INSIGHTS</div>
+      <button class="nav-item" data-view="ai" onclick="showView('ai')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M8 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 4 5l4 2M16 5a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-4 5l-4 2"/></svg></span> AI Prediction</button>
+      <button hidden style="display:none" class="nav-item" data-view="backtest" onclick="showView('backtest')"><span>◐</span> Backtester</button>
+      <button class="nav-item" data-view="risk" onclick="showView('risk')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3 8 8 10 5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg></span> Risk Manager</button>
+      <button hidden style="display:none" class="nav-item" data-view="journal" onclick="showView('journal')"><span>▤</span> Trading Journal</button>
 
-      <div class="nav-label">LEARN & ACCOUNT</div>
-      <button class="nav-item" data-view="academy" onclick="showView('academy')"><span>🎓</span> Academy · 30 Ch.</button>
-      <button class="nav-item" data-view="connect" onclick="showView('connect')"><span>🔗</span> Connect Deriv</button>
+      <div class="nav-label">ACCOUNT</div>
+      <button hidden style="display:none" class="nav-item" data-view="academy" onclick="showView('academy')"><span>🎓</span> Academy · 30 Ch.</button>
+      <button class="nav-item" data-view="connect" onclick="showView('connect')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-2 2M14 11a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l2-2"/></svg></span> Connect Deriv</button>
     </nav>
 
     <div class="sidebar-foot">
@@ -80,84 +81,52 @@
 
   <!-- MAIN -->
   <main class="main">
+    <div class="alert-banner safety-notice"><span class="notice-icon">!</span><span><b>Trading is experimental.</b> Account integration is untested; bot trading is demo-only. Local limits are not account-wide.</span></div>
     <header class="topbar">
       <div class="topbar-left">
         <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
         <div>
           <h1 id="viewTitle">Dashboard</h1>
-          <p id="viewSub">Everything from 3 platforms — in one workspace.</p>
+          <p id="viewSub">Your trading workspace</p>
         </div>
       </div>
       <div class="topbar-right">
         <select id="symbolSelect" class="select" onchange="selectSymbol(this.value)"></select>
+        <span class="badge" id="feedStatus" aria-live="polite">DATA: DISCONNECTED</span>
         <div class="price-chip" id="priceChip">—</div>
         <button class="btn btn-ghost" onclick="toggleAlerts()">🔔 <span id="alertCount">0</span></button>
-        <a class="btn btn-red" id="topConnectBtn" href="https://app.deriv.com/oauth2/authorize?app_id=1089" target="_blank" rel="noopener">⚡ Login with Deriv</a>
+        <button class="btn btn-red" id="topConnectBtn" onclick="showView('connect')">Connect account</button>
       </div>
     </header>
 
     <!-- ============ DASHBOARD ============ -->
     <section class="view active" id="view-dashboard">
-      <div class="hero">
-        <div class="hero-copy">
-          <div class="eyebrow">DERIV TRADING TERMINAL</div>
-          <h2>Trade smarter.<br><span class="grad">Live signals, bots & AI.</span></h2>
-          <p>Real-time Deriv tick streaming, digit analysis, automated bots, AI predictions, and risk management connected directly to your Deriv account.</p>
-          <div class="hero-cta">
-            <button class="btn btn-red btn-lg" onclick="showView('connect')">🔗 Connect Deriv</button>
-            <button class="btn btn-outline btn-lg" onclick="showView('signals')">⚡ Live Signals</button>
-            <button class="btn btn-ghost btn-lg" onclick="showView('bots')">🤖 Bots</button>
-          </div>
-          <div class="hero-stats">
-            <div><b id="statTicks">0</b><span>Ticks analysed</span></div>
-            <div><b>50+</b><span>Indicators</span></div>
-            <div><b>10</b><span>Synthetic indices</span></div>
-          </div>
+      <div class="dashboard-intro">
+        <div><div class="eyebrow">YOUR WORKSPACE <span> / </span> OVERVIEW</div><h2>Trade with clarity<span class="accent-dot">.</span></h2><p>Your markets, strategies and account in one place.</p></div>
+        <button class="btn btn-outline" onclick="showView('markets')">Explore markets <span aria-hidden="true">↗</span></button>
+      </div>
+      <div class="dashboard-grid">
+        <div class="market-panel card">
+          <div class="market-panel-head"><div><div class="overline">SELECTED MARKET</div><h3 id="heroSymbol">Volatility 75 Index</h3><span class="market-caption">Tick chart · Deriv</span></div><div class="market-meta"><span class="live-indicator" id="marketIndicator"><i></i> Awaiting feed</span><span class="mono" id="heroClock">--:--:--</span></div></div>
+          <div class="chart-stage"><canvas id="heroChart" height="210"></canvas><div class="chart-empty" id="marketEmpty"><div class="empty-icon">⌁</div><b>Waiting for market data</b><span>Connect your Deriv account to see live ticks.</span><button class="btn btn-outline btn-sm" onclick="showView('connect')">Connect account <span aria-hidden="true">↗</span></button></div></div>
+          <div class="market-metrics"><div><span>Last digit</span><b id="heroDigit">—</b></div><div><span>Observed frequency</span><b id="heroEdge">—</b></div><div><span>Even / odd</span><b id="heroParity">—</b></div><div><span>Model score</span><b id="heroAI">—</b></div></div>
         </div>
-        <div class="hero-panel">
-          <div class="panel-head"><span>🔴 LIVE — <span id="heroSymbol">Volatility 75</span></span><span class="mono" id="heroClock">--:--:--</span></div>
-          <canvas id="heroChart" height="140"></canvas>
-          <div class="hero-grid">
-            <div><small>Last Digit</small><b id="heroDigit" class="big-digit">—</b></div>
-            <div><small>Over/Under Edge</small><b id="heroEdge">—</b></div>
-            <div><small>Even / Odd</small><b id="heroParity">—</b></div>
-            <div><small>AI Confidence</small><b id="heroAI">—</b></div>
-          </div>
-          <div class="hero-actions">
-            <button class="btn btn-green btn-sm" onclick="quickTrade('DIGITOVER')">Buy OVER</button>
-            <button class="btn btn-red2 btn-sm" onclick="quickTrade('DIGITUNDER')">Buy UNDER</button>
-            <button class="btn btn-outline btn-sm" onclick="showView('digits')">Full Analysis →</button>
-          </div>
+        <div class="dashboard-side">
+          <div class="card account-summary"><div class="dashboard-card-head"><div><div class="overline">ACCOUNT</div><h3>Your session</h3></div><span class="card-symbol">↗</span></div><div class="session-stats" id="sessionStats"></div><canvas id="equityChart" height="110" hidden></canvas><button class="text-link" onclick="showView('connect')">Account settings <span>→</span></button></div>
+          <div class="card quick-card"><div class="dashboard-card-head"><div><div class="overline">QUICK ACTIONS</div><h3>Ready when you are</h3></div></div><button class="quick-action" onclick="showView('trade')"><span class="quick-icon">↗</span><span><b>Place a trade</b><small>Request a Deriv quote</small></span><span class="quick-arrow">→</span></button><button class="quick-action" onclick="showView('autotrader')"><span class="quick-icon violet">◇</span><span><b>Auto-trader</b><small>Demo accounts only</small></span><span class="quick-arrow">→</span></button></div>
         </div>
       </div>
-
-      <div class="section-title"><h3>Everything in one place</h3><span>No juggling apps — bots, charts & analysis live together.</span></div>
-      <div class="feature-grid" id="featureGrid"></div>
-
-      <div class="section-title"><h3>Live Market Snapshot</h3><span>Click any card to open it in the Market Monitor.</span></div>
-      <div class="cards-grid" id="snapshotGrid"></div>
-
-      <div class="two-col">
-        <div class="card">
-          <div class="card-head"><h4>⚡ Top Signals Right Now</h4><button class="btn btn-ghost btn-sm" onclick="showView('signals')">View all →</button></div>
-          <div id="dashSignals"></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h4>📈 Your Session</h4><button class="btn btn-ghost btn-sm" onclick="showView('journal')">Journal →</button></div>
-          <div class="session-stats" id="sessionStats"></div>
-          <canvas id="equityChart" height="110"></canvas>
-        </div>
-      </div>
-
-      <div class="section-title"><h3>What traders are saying</h3><span>Real reviews from the 3 original platforms.</span></div>
-      <div class="reviews" id="reviewsGrid"></div>
+      <div class="section-title"><div><div class="overline">MARKET WATCH</div><h3>Market snapshot</h3></div><button class="text-link" onclick="showView('markets')">View all markets <span>→</span></button></div>
+      <div class="cards-grid snapshot-grid" id="snapshotGrid"></div>
+      <div class="dashboard-bottom card"><div class="dashboard-card-head"><div><div class="overline">OBSERVED DATA</div><h3>Recent frequencies</h3></div><button class="text-link" onclick="showView('signals')">View analysis <span>→</span></button></div><div id="dashSignals"></div><p class="muted small">Past frequencies are not forecasts.</p></div>
+      <div id="featureGrid" hidden></div><div id="reviewsGrid" hidden></div><span id="statTicks" hidden>0</span>
     </section>
 
     <!-- ============ MARKETS ============ -->
     <section class="view" id="view-markets">
       <div class="toolbar">
         <input class="input search" placeholder="🔍 Search symbol… e.g. Boom, Volatility, Step" oninput="renderWatchlist(this.value)">
-        <select class="select" id="tfSelect" onchange="changeTF(this.value)"><option value="60">1m Candles</option><option value="300">5m</option><option value="900">15m</option><option value="3600">1h</option><option value="86400">1d</option></select>
+        <select class="select" id="tfSelect" onchange="changeTF(this.value)"><option value="60">10 ticks / candle</option><option value="300">30 ticks / candle</option><option value="900">60 ticks / candle</option><option value="3600">120 ticks / candle</option><option value="86400">300 ticks / candle</option></select>
         <select class="select" onchange="changeChartType(this.value)" id="chartTypeSel"><option value="candles">Candlestick</option><option value="line">Line</option><option value="area">Area</option></select>
         <button class="btn btn-outline btn-sm" onclick="renderWatchlist()">↻ Refresh</button>
       </div>
@@ -171,45 +140,45 @@
         <div class="indicator-strip" id="indicatorStrip"></div>
       </div>
       <div class="card">
-        <div class="card-head"><h4>📊 50+ Indicators — Live State</h4><span class="muted">Computed in-browser from live ticks</span></div>
+        <div class="card-head"><h4>📊 Available Indicators — Experimental</h4><span class="muted">Computed in-browser from live ticks</span></div>
         <div class="ind-table" id="indicatorTable"></div>
       </div>
     </section>
 
     <!-- ============ DIGITS ============ -->
     <section class="view" id="view-digits">
-      <div class="alert-banner">◉ <b>Digit Analysis Engine</b> — Live last-digit extraction, transition probabilities, streaks & gaps. Computed from the last <span id="digitSample">0</span> ticks of <b id="digitSymLabel">Volatility 75</b>.</div>
+      <div class="alert-banner">◉ <b>Digit Analysis Engine</b> — Last-digit frequencies, transitions, streaks and gaps; requires Deriv precision metadata and does not predict outcomes. Computed from the last <span id="digitSample">0</span> ticks of <b id="digitSymLabel">Volatility 75</b>.</div>
       <div class="digit-row" id="lastDigits"></div>
       <div class="grid-3">
         <div class="card"><div class="card-head"><h4>Digit Frequency (0–9)</h4></div><canvas id="digitFreqChart" height="180"></canvas><div class="digit-legend" id="digitLegend"></div></div>
-        <div class="card"><div class="card-head"><h4>Over / Under Win-Rate</h4></div><div id="overUnderTable"></div></div>
+        <div class="card"><div class="card-head"><h4>Observed Over / Under frequencies</h4></div><div id="overUnderTable"></div></div>
         <div class="card"><div class="card-head"><h4>Even / Odd · Matches / Differs · Rise / Fall</h4></div><div id="parityPanel"></div></div>
       </div>
       <div class="grid-2">
-        <div class="card"><div class="card-head"><h4>🔀 Transition Matrix — What follows what?</h4><span class="muted">P(next digit | current digit)</span></div><div id="transitionMatrix" class="matrix-wrap"></div></div>
+        <div class="card"><div class="card-head"><h4>🔀 Transition Matrix — What follows what?</h4><span class="muted">Observed transitions; not a forecast</span></div><div id="transitionMatrix" class="matrix-wrap"></div></div>
         <div class="card"><div class="card-head"><h4>🔥 Hot / Cold · Streaks & Gaps</h4></div><div id="streakPanel"></div>
           <div class="card-head" style="margin-top:16px"><h4>⭕ D-Circles</h4></div><canvas id="dcircles" height="160"></canvas>
         </div>
       </div>
-      <div class="card"><div class="card-head"><h4>📐 Probability Distribution — Next Tick</h4><span class="muted">Full shape, not just a number</span></div><canvas id="distChart" height="160"></canvas></div>
+      <div class="card"><div class="card-head"><h4>📐 Observed Digit Distribution</h4><span class="muted">Past ticks only</span></div><canvas id="distChart" height="160"></canvas></div>
     </section>
 
     <!-- ============ SIGNALS ============ -->
     <section class="view" id="view-signals">
       <div class="toolbar">
         <button class="btn btn-red btn-sm" onclick="scanSignals(true)">⚡ Scan All Symbols</button>
-        <label class="check"><input type="checkbox" id="onlyEdge" onchange="renderSignals()"> Only strong edge (&gt;55%)</label>
+        <label class="check"><input type="checkbox" id="onlyEdge" onchange="renderSignals()"> Only observed frequency above 55%</label>
         <span class="muted" id="scanInfo">Scanning live ticks…</span>
       </div>
       <div class="cards-grid" id="signalCards"></div>
-      <div class="card"><div class="card-head"><h4>Signal Scanner — Ranked by Edge</h4></div><div class="table-wrap"><table class="table" id="signalTable"></table></div></div>
+      <div class="card"><div class="card-head"><h4>Scanner — Ranked by observed frequency</h4></div><div class="table-wrap"><table class="table" id="signalTable"></table></div></div>
     </section>
 
     <!-- ============ TRADE ============ -->
     <section class="view" id="view-trade">
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h4>⇄ Place Trade</h4><span class="badge" id="tradeModeBadge">DEMO / MOCK</span></div>
+          <div class="card-head"><h4>⇄ Place Trade</h4><span class="badge" id="tradeModeBadge">DISCONNECTED</span></div>
           <label class="lbl">Contract Type</label>
           <select class="select full" id="contractType" onchange="updateProposal()">
             <option value="DIGITOVER">Over — Last digit higher than barrier</option>
@@ -225,24 +194,25 @@
           </select>
           <div class="form-grid">
             <div><label class="lbl">Barrier / Digit (0–9)</label><input class="input full" type="number" id="barrier" value="5" min="0" max="9" oninput="updateProposal()"></div>
-            <div><label class="lbl">Stake (USD)</label><input class="input full" type="number" id="stake" value="1" min="0.35" step="0.5" oninput="updateProposal()"></div>
+            <div><label class="lbl">Stake (account currency when connected)</label><input class="input full" type="number" id="stake" value="1" min="0.35" step="0.5" oninput="updateProposal()"></div>
             <div><label class="lbl">Duration</label><select class="select full" id="duration" onchange="updateProposal()"><option value="1">1 tick</option><option value="5" selected>5 ticks</option><option value="10">10 ticks</option><option value="15">15 ticks</option></select></div>
-            <div><label class="lbl">Duration Unit</label><select class="select full" id="durationUnit"><option value="t">Ticks</option><option value="m">Minutes</option></select></div>
+            <div><label class="lbl">Duration unit</label><span class="muted">Ticks only</span></div>
           </div>
-          <div class="proposal-box" id="proposalBox">Connect or stay in demo — proposal will appear here.</div>
-          <button class="btn btn-red btn-lg btn-block" id="buyBtn" onclick="buyContract()">BUY CONTRACT</button>
-          <p class="muted small">In demo mode trades settle against the simulated feed. Connect Deriv to trade on your real/demo account via the official API.</p>
+          <div class="proposal-box" id="proposalBox">Connect to Deriv and request a quote for actual contract pricing.</div>
+          <button class="btn btn-red btn-lg btn-block" id="buyBtn" onclick="buyContract()">CONNECT TO REQUEST QUOTE</button>
+          <p class="muted small">Orders require a Deriv quote and confirmation.</p>
         </div>
         <div>
-          <div class="card"><div class="card-head"><h4>📂 Open Contracts</h4><span class="muted" id="openCount">0 open</span></div><div id="openContracts"></div></div>
-          <div class="card" style="margin-top:16px"><div class="card-head"><h4>💰 Portfolio</h4></div><div id="portfolioBox"></div></div>
+          <div class="card"><div class="card-head"><h4>Open contracts</h4><span class="muted" id="openCount">0 open</span></div><div id="openContracts"></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>Portfolio</h4></div><div id="portfolioBox"></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>Account contract tracking</h4></div><p class="muted small">Tracking may be incomplete. Verify in Deriv.</p><p id="accountOrderStatus" role="status"></p><button id="ackOrderBtn" class="btn btn-outline btn-sm" style="display:none" onclick="acknowledgeUncertainOrder()">I checked Deriv — clear warning</button><div id="accountContracts"></div></div>
         </div>
       </div>
     </section>
 
     <!-- ============ BOTS ============ -->
     <section class="view" id="view-bots">
-      <div class="alert-banner">🤖 <b>Free Bot Library</b> — 12 proven strategies. Load in one click, test on demo, run live. No coding required.</div>
+      <div class="alert-banner">🤖 <b>Bot Library</b> — Experimental strategies; some presets share logic and unfinished bots are marked. No strategy or win rate is guaranteed.</div>
       <div class="cards-grid" id="botGrid"></div>
     </section>
 
@@ -283,25 +253,25 @@
     <section class="view" id="view-autotrader">
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h4>▶ Auto-Trader Engine</h4><span class="badge" id="autoBadge">STOPPED</span></div>
+          <div class="card-head"><h4>Auto-trader</h4><span class="badge" id="autoBadge">STOPPED</span></div>
           <label class="lbl">Strategy</label><select class="select full" id="autoStrategy"></select>
           <label class="lbl">Symbol</label><select class="select full" id="autoSymbol"></select>
           <div class="form-grid">
-            <div><label class="lbl">Base Stake (USD)</label><input class="input full" type="number" id="autoStake" value="0.35" step="0.05" min="0.35"></div>
+            <div><label class="lbl">Base Stake / Kelly Cap (currency units)</label><input class="input full" type="number" id="autoStake" value="0.35" step="0.05" min="0.35"></div>
             <div><label class="lbl">Max Trades</label><input class="input full" type="number" id="autoMaxTrades" value="15"></div>
-            <div><label class="lbl">Take Profit (USD)</label><input class="input full" type="number" id="autoTP" value="1.50" step="0.1"></div>
-            <div><label class="lbl">Stop Loss (USD)</label><input class="input full" type="number" id="autoSL" value="1.50" step="0.1"></div>
-            <div><label class="lbl">Min Confidence %</label><input class="input full" type="number" id="autoConf" value="70"></div>
-            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Smart AI Recovery</option><option value="martingale">Martingale ×2</option></select></div>
+            <div><label class="lbl">Take Profit (currency units)</label><input class="input full" type="number" id="autoTP" value="1.50" step="0.1"></div>
+            <div><label class="lbl">Stop Loss (currency units)</label><input class="input full" type="number" id="autoSL" value="1.50" step="0.1"></div>
+            <div><label class="lbl">Minimum strategy score %</label><input class="input full" type="number" id="autoConf" value="70"></div>
+            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Smart AI Recovery</option><option value="martingale">Martingale ×2</option><option value="fibonacci">Fibonacci</option><option value="oscar">Oscar-style cycle</option><option value="paroli">Paroli (3-win cap)</option></select></div>
           </div>
-          <label class="check"><input type="checkbox" id="autoSpeed"> Speedbot mode — react instantly to every tick</label>
+          <p class="muted small">Demo only. Scores are uncalibrated; recovery can increase losses. Stop cannot cancel an open contract.</p>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
           <div class="btn-row"><button class="btn btn-green btn-lg" id="autoStartBtn" onclick="toggleAutoTrader()">▶ START AUTO-TRADER</button><button class="btn btn-red2" onclick="stopAutoTrader()">■ Stop</button></div>
           <div class="auto-stats" id="autoStats"></div>
           <button class="btn btn-outline btn-sm btn-block" onclick="resetAutoStats()" style="margin-top:10px">Reset</button>
         </div>
         <div class="card">
-          <div class="card-head"><h4>📋 Live Trade Log — Every trade with reasoning</h4><button class="btn btn-ghost btn-sm" onclick="clearAutoLog()">Clear</button></div>
+          <div class="card-head"><h4>Session log</h4><button class="btn btn-ghost btn-sm" onclick="clearAutoLog()">Clear</button></div>
           <div id="autoLog" class="log-box"></div>
         </div>
       </div>
@@ -309,49 +279,35 @@
 
     <!-- ============ COPY ============ -->
     <section class="view" id="view-copy">
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-head"><h4>⧉ Copy Trading</h4><span class="muted">One trade → many accounts</span></div>
-          <p class="muted">Add follower Deriv API tokens (up to 100). When you buy, the same contract is bought on every follower — with per-token stake & symbol limits.</p>
-          <label class="lbl">Follower Token</label><input class="input full mono" id="followerToken" placeholder="Paste Deriv API token…">
-          <div class="form-grid"><div><label class="lbl">Max Stake</label><input class="input full" id="followerMaxStake" value="5"></div><div><label class="lbl">Allowed Symbols</label><input class="input full" id="followerSymbols" value="ALL"></div></div>
-          <button class="btn btn-outline btn-block" onclick="addFollower()">+ Add Follower</button>
-          <div id="followerList" style="margin-top:12px"></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h4>📊 Copy Results — Per Follower</h4></div>
-          <div id="copyResults"></div>
-          <div class="card-head" style="margin-top:16px"><h4>🎉 Copy Trading — Free for Everyone</h4></div>
-          <div class="free-box">
-            <b>Unlimited followers · No tiers · No fees</b>
-            <p>Copy trading works for any account balance — $100 or $10,000, same full access. Add up to 100 follower tokens with per-token stake & symbol limits. 100% free for your personal use.</p>
-          </div>
-        </div>
+      <div class="card"><div class="card-head"><h4>⧉ Copy Trading</h4><span class="muted">Not implemented</span></div>
+        <p id="followerList" class="muted">Copy trading is not implemented. Do not share follower tokens with the app.</p>
       </div>
     </section>
 
     <!-- ============ AI ============ -->
     <section class="view" id="view-ai">
-      <div class="alert-banner">🧠 <b>AI Prediction Engine</b> — Runs entirely in your browser. Markov chain + frequency weighting over the recent tick sequence. Full probability distribution + confidence + calibration log.</div>
+      <div class="alert-banner">🧠 <b>AI Prediction Engine</b> — Runs entirely in your browser. Markov chain + frequency weighting over the recent tick sequence. Experimental distribution and next-tick evaluation; model scores are not guaranteed or calibrated probabilities.</div>
       <div class="grid-3">
         <div class="card"><div class="card-head"><h4>Next-Tick Prediction</h4></div><div id="aiPrediction"></div></div>
         <div class="card"><div class="card-head"><h4>Probability Distribution</h4></div><canvas id="aiDistChart" height="180"></canvas></div>
         <div class="card"><div class="card-head"><h4>Model Features</h4></div><div id="aiFeatures"></div></div>
       </div>
-      <div class="card"><div class="card-head"><h4>📓 Prediction Log — Resolved & Auditable</h4><button class="btn btn-ghost btn-sm" onclick="aiPredict(true)">Predict Now</button></div><div class="table-wrap"><table class="table" id="aiLogTable"></table></div></div>
+      <div class="card"><div class="card-head"><h4>📊 Model Evaluation</h4></div><div id="aiCalibration" class="bt-grid"></div></div>
+      <div class="card"><div class="card-head"><h4>📓 Next-Tick Prediction Log</h4><div class="btn-row"><button class="btn btn-ghost btn-sm" onclick="aiPredict(true)">Predict Now</button><button class="btn btn-ghost btn-sm" onclick="clearPredictionLog()">Clear Log</button></div></div><div class="table-wrap"><table class="table" id="aiLogTable"></table></div></div>
     </section>
 
     <!-- ============ BACKTEST ============ -->
     <section class="view" id="view-backtest">
       <div class="card">
-        <div class="card-head"><h4>◐ Backtester — Test any bot on historical ticks before going live</h4></div>
+        <div class="card-head"><h4>◐ Backtester — Experimental local tick replay</h4></div>
         <div class="toolbar">
           <select class="select" id="btBot"></select>
           <select class="select" id="btSymbol"></select>
           <input class="input" type="number" id="btStake" value="1" style="width:100px">
-          <button class="btn btn-red" onclick="runBacktest()">▶ Run Backtest (1,000 ticks)</button>
+          <button class="btn btn-red" onclick="runBacktest()">▶ Run Replay</button>
+          <label class="muted small"><input type="checkbox" id="btHoldout"> Compare chronological halves</label>
         </div>
-        <div id="btResults"></div>
+        <p class="muted small">Uses the available local tick buffer and each strategy’s tick duration, plus the Auto-Trader score, recovery, trade limit and TP/SL, maximum stake percentage and loss streak. Multi-market replay requires aligned simulated data. Daily and timer limits are not replayed. Payouts are illustrative, not Deriv prices.</p><div id="btResults"></div>
         <canvas id="btChart" height="200"></canvas>
       </div>
     </section>
@@ -360,14 +316,15 @@
     <section class="view" id="view-risk">
       <div class="grid-3">
         <div class="card"><div class="card-head"><h4>🛡 Session Guards</h4></div>
-          <label class="lbl">Daily Loss Limit (USD)</label><input class="input full" type="number" id="riskDailyLoss" value="20">
+          <p class="muted small">Demo bots use session loss, stake, streak and timer limits; manual account orders check only maximum stake %. Account-wide loss and other devices are not tracked. Limits cannot guarantee protection.</p>
+          <label class="lbl">Demo bot session loss limit</label><input class="input full" type="number" id="riskDailyLoss" value="20">
           <label class="lbl">Max Stake % of Balance</label><input class="input full" type="number" id="riskMaxStakePct" value="5">
           <label class="lbl">Max Consecutive Losses</label><input class="input full" type="number" id="riskMaxLossStreak" value="5">
           <label class="lbl">Session Timer (minutes, 0 = off)</label><input class="input full" type="number" id="riskTimer" value="0">
           <button class="btn btn-green btn-block" onclick="saveRisk()">💾 Save Risk Settings</button>
           <div id="riskStatus" style="margin-top:12px"></div>
         </div>
-        <div class="card"><div class="card-head"><h4>🧮 Position Size Calculator</h4></div>
+        <div class="card" hidden style="display:none"><div class="card-head"><h4>🧮 Position Size Calculator</h4></div>
           <label class="lbl">Balance</label><input class="input full" type="number" id="calcBalance" value="1000">
           <label class="lbl">Risk % per trade</label><input class="input full" type="number" id="calcRiskPct" value="2">
           <label class="lbl">Win Rate % (est.)</label><input class="input full" type="number" id="calcWinRate" value="55">
@@ -375,7 +332,7 @@
           <button class="btn btn-outline btn-block" onclick="calcPosition()">Calculate</button>
           <div id="calcOut" style="margin-top:12px"></div>
         </div>
-        <div class="card"><div class="card-head"><h4>📈 Equity Curve</h4></div><canvas id="riskEquity" height="200"></canvas><div id="riskStats"></div></div>
+        <div class="card"><div class="card-head"><h4>📈 Account Statistics</h4></div><canvas id="riskEquity" height="200" hidden></canvas><div id="riskStats"></div></div>
       </div>
     </section>
 
@@ -403,14 +360,14 @@
     <section class="view" id="view-connect">
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h4>🔗 Connect Your Deriv Account</h4><span class="badge">Official Deriv API</span></div>
-          <p class="muted small">Paste your Deriv API Token below and click <b>Connect & Authorize</b> to load your Real/Demo balance.</p>
+          <div class="card-head"><h4>Connect account</h4><span class="badge">Official Deriv API</span></div>
+          <p class="muted small">Tokens stay in memory until disconnect or reload.</p>
           <label class="lbl">Deriv App ID</label>
           <input class="input full mono" id="appIdInput" value="1089">
           <label class="lbl">Deriv API Token (from app.deriv.com → API Token)</label>
           <input class="input full mono" id="tokenInput" type="password" placeholder="Paste your Deriv API token here…">
           <div class="btn-row">
-            <button class="btn btn-red btn-lg" onclick="connectDeriv()">🔌 Connect & Authorize</button>
+            <button class="btn btn-red btn-lg" onclick="connectDeriv()">Connect & authorize</button>
             <button class="btn btn-outline" onclick="disconnectDeriv()">Disconnect</button>
           </div>
           <div class="btn-row">
@@ -426,15 +383,12 @@
               <li>Paste the token here and click <b>Connect & Authorize</b></li>
             </ol>
           </div>
-          <div class="card" style="margin-top:16px"><div class="card-head"><h4>📱 Login on Another Device (Sync)</h4></div>
-            <p class="muted small">Generate a 1-click login link to use your Deriv account & bots on your phone or another PC without re-entering your token.</p>
-            <div class="btn-row">
-              <button class="btn btn-red btn-sm" onclick="generateSyncLink()">🔗 Copy Sync Login Link</button>
-            </div>
-            <input class="input full mono" id="syncOutput" readonly placeholder="Your 1-click sync link will appear here…" style="margin-top:8px">
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>Bot settings</h4></div>
+            <p class="muted small">Export or import bot configurations only. Account tokens and orders are not included. Review the JSON before sharing; importing replaces local bot settings.</p>
+            <textarea class="input full mono" id="botConfigText" rows="7" placeholder="Export settings here or paste settings JSON…"></textarea>
             <div class="btn-row" style="margin-top:10px">
-              <input class="input mono" id="syncInput" placeholder="Paste sync link/code from another device" style="flex:1">
-              <button class="btn btn-outline btn-sm" onclick="applySyncCode()">Login</button>
+              <button class="btn btn-outline btn-sm" onclick="exportBotSettings()">Export bot settings</button>
+              <button class="btn btn-outline btn-sm" onclick="importBotSettings()">Import bot settings</button>
             </div>
           </div>
         </div>
@@ -442,9 +396,7 @@
     </section>
 
     <footer class="footer">
-      DerivBot Pro X · Personal Trading Terminal
-    </footer>
-      <b>DerivBot Pro X — 100% Free for Personal Use</b> · TraderScheme + Expert Analysis Tool + ProCortex, combined ×10. No paid plans, no paywalls — every feature is free. Third-party tool, not affiliated with Deriv Ltd. Trading involves risk of loss; never trade money you cannot afford to lose.
+      DerivBot Pro X · Independent trading workspace. Not affiliated with Deriv. Trading involves risk.
     </footer>
   </main>
 </div>
