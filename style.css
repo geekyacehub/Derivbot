@@ -260,3 +260,16 @@ body{background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--txt
 @media(max-width:520px){.dashboard-intro{align-items:flex-start;flex-direction:column}.dashboard-side{grid-template-columns:1fr}.snapshot-grid{grid-template-columns:1fr 1fr}.market-meta{flex-direction:column;align-items:flex-end;gap:5px}.topbar-right .select{max-width:160px}.safety-notice{font-size:10px}.chart-stage,.chart-stage canvas{height:175px}.market-panel-head h3{font-size:14px}}
 .nav-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}.nav-icon svg{width:17px;height:17px}
 .live-indicator i{background:#777887}.live-indicator.has-ticks i{background:#85cfad}
+
+/* Original DerivBot palette, retained with the refined layout */
+:root{--bg:#070b12;--panel:#0e1622;--panel2:#111e2e;--line:#1c2c42;--txt:#e8eef7;--mut:#8aa0b8;--red:#ff444f;--green:#00d09c;--amber:#ffb020;--blue:#2e9bff}
+.sidebar{background:linear-gradient(180deg,#0b1220,#080d16);border-color:#1c2c42}
+.logo-mark{background:linear-gradient(135deg,#ff444f,#ff7a45);color:#fff}.logo-name span,.accent-dot,.card-symbol{color:#ff444f}
+.conn-card,.price-chip{background:#111e2e;border-color:#1c2c42}.conn-badge,.pill{background:#22344d;color:#b8c9dd}
+.nav-item{color:#b7c7d9}.nav-item span{color:#8aa0b8}.nav-item:hover{background:#152238}.nav-item.active{background:rgba(255,68,79,.14);color:#fff;box-shadow:inset 3px 0 0 #ff444f}.nav-item.active span{color:#ff8a91}
+.topbar{border-color:#1c2c42}.badge{background:rgba(0,208,156,.13);color:#72dabd}
+.card,.sym-card,.bot-card,.signal-card{background:#0e1622;border-color:#1c2c42}.card:hover{border-color:#2e4a6b}.sym-card:hover{border-color:#ff444f}
+.btn-red{background:#ff444f;color:#fff}.btn-green{background:#00d09c;color:#04241a}.btn-outline{background:#111e2e;border-color:#263b54;color:#e8eef7}.input,.select,.proposal-box,.log-box,.contract,.ind-cell,.flow-item{background:#0d1624;border-color:#1c2c42;color:#e8eef7}.input:focus,.select:focus{outline-color:#ff444f}
+.text-link{color:#ff8a91}.empty-icon,.quick-icon.violet{background:rgba(255,68,79,.14);color:#ff8a91}.quick-icon{background:rgba(0,208,156,.13);color:#60dfbc}
+.chart-stage{border-color:#1c2c42;background:repeating-linear-gradient(to bottom,transparent 0,transparent 51px,#1b2a3c 52px)}.chart-empty{background:linear-gradient(90deg,rgba(14,22,34,.1),rgba(14,22,34,.7),rgba(14,22,34,.1))}.market-metrics div,.quick-action,.dashboard-bottom .ou-row{border-color:#1c2c42}
+.toast{background:#16233a;border-color:#263b54}.hamburger{background:#111e2e;border-color:#1c2c42}.footer{border-color:#1c2c42}
