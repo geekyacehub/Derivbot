@@ -597,8 +597,10 @@ function onAutoSettle(entry){
   renderAutoStats();
 }
 function renderAutoStats(){
-  const a=S.auto; const wr=a.trades? (a.wins/(a.wins+a.losses||1)*100):0;
-  $('autoStats').innerHTML=`<div><b>${a.trades}</b><span>Trades</span></div><div><b>${wr.toFixed(0)}%</b><span>Win Rate</span></div><div><b style="color:${a.pnl>=0?'var(--green)':'var(--red)'}">${a.pnl>=0?'+':''}$${fmt(a.pnl)}</b><span>Session P/L</span></div><div><b>$${fmt(a.curStake)}</b><span>Next Stake</span></div><div><b>${a.lossStreak}</b><span>Loss Streak</span></div><div><b>${a.maxTrades-a.trades}</b><span>Trades Left</span></div>`;
+  const a=S.auto;
+  const totalStake=a.trades*(a.stake||0);
+  const totalPayout=Math.max(0, totalStake+a.pnl);
+  $('autoStats').innerHTML=`<div><b>$${fmt(totalStake)}</b><span>Total stake</span></div><div><b>$${fmt(totalPayout)}</b><span>Total payout</span></div><div><b>${a.trades}</b><span>No. of runs</span></div><div><b style="color:var(--red)">${a.losses}</b><span>Contracts lost</span></div><div><b style="color:var(--green)">${a.wins}</b><span>Contracts won</span></div><div><b style="color:${a.pnl>=0?'var(--green)':'var(--red)'}">${a.pnl>=0?'+':''}$${fmt(a.pnl)}</b><span>Total profit/loss</span></div>`;
 }
 
 /* ================= COPY TRADING ================= */
