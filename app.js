@@ -263,14 +263,31 @@ function updateTabReconnect(){
   }
   if(S.connected) saveTabConnection();
 }
-let _epIdx=0, _connTimer=null, _connectionGeneration=0;
+let _epIdx=0, _connTimer=null, _connectionGeneration=0, _connecting=false, _restAbort=null;
+function setConnecting(value){
+  _connecting=value;
+  const button=$('connectBtn');
+  if(button){ button.disabled=value; button.textContent=value?'Connecting…':'Connect & authorize'; }
+}
+async function fetchDerivWithTimeout(url,options){
+  if(typeof AbortController==='undefined') return fetch(url,options);
+  const controller=new AbortController(); _restAbort=controller;
+  let timedOut=false;
+  const timeout=setTimeout(()=>{timedOut=true; controller.abort();},12000);
+  try{ return await fetch(url,{...options,signal:controller.signal}); }
+  catch(e){ if(timedOut){const err=new Error('request timed out');err.name='TimeoutError';throw err;} throw e; }
+  finally{clearTimeout(timeout); if(_restAbort===controller) _restAbort=null;}
+}
 async function connectDeriv(){
+  if(_connecting) return toast('Connection attempt already in progress.');
   if(S.openContracts.length) return toast('Wait for simulated contracts to settle before connecting.');
   if(S.ws) disconnectDeriv({preserveToken:true});
   if(S.auto.running) stopAutoTrader();
   const generation=++_connectionGeneration;
   const appId = $('appIdInput').value.trim()||'1089';
   const token = $('tokenInput').value.trim()||S.token;
+  if(!token){ setConnecting(false); return toast('Enter an API token to connect.'); }
+  setConnecting(true);
   if(S.token && token!==S.token) clearTabConnection();
   S.appId=appId; S.token=token; $('tokenInput').value='';
   try{localStorage.setItem('dbx_appid',appId); localStorage.removeItem('dbx_token');}catch(e){}
@@ -281,7 +298,7 @@ async function connectDeriv(){
     try{
       const headers={'Authorization':`Bearer ${token}`,'Content-Type':'application/json'};
       if(appId && appId!=='1089') headers['Deriv-App-ID']=appId;
-      const accRes=await fetch('https://api.derivws.com/trading/v1/options/accounts',{headers});
+      const accRes=await fetchDerivWithTimeout('https://api.derivws.com/trading/v1/options/accounts',{headers});
       if(generation!==_connectionGeneration) return;
       if(accRes.ok){
         const accData=await accRes.json();
@@ -290,11 +307,11 @@ async function connectDeriv(){
         if(Array.isArray(list) && list.length>0){
           logConn(`Accounts from Deriv: ${list.map(a=>`${a.account_id||a.id||a.loginid}(${a.account_type||(a.is_virtual?'demo':'real')})`).join(', ')}`);
           const target=list.find(a=>S.isDemo?isVerifiedDemoAccount(a):((a.account_type==='real'||a.is_virtual===0||a.is_virtual===false) && a.account_type!=='demo' && a.is_virtual!==1 && a.is_virtual!==true));
-          if(!target){ logConn('No account matching the selected Demo/Real mode was returned.'); toast('No account matches the selected mode.'); return; }
+          if(!target){ logConn('No account matching the selected Demo/Real mode was returned.'); toast('No account matches the selected mode.'); setConnecting(false); return; }
           const accId=target.account_id||target.id||target.loginid;
-          if(!accId){ logConn('Selected account has no usable ID.'); return; }
+          if(!accId){ logConn('Selected account has no usable ID.'); setConnecting(false); return; }
           logConn(`✅ Found account ${accId}. Requesting WebSocket OTP…`);
-          const otpRes=await fetch(`https://api.derivws.com/trading/v1/options/accounts/${encodeURIComponent(accId)}/otp`,{method:'POST',headers});
+          const otpRes=await fetchDerivWithTimeout(`https://api.derivws.com/trading/v1/options/accounts/${encodeURIComponent(accId)}/otp`,{method:'POST',headers});
           if(generation!==_connectionGeneration) return;
           if(otpRes.ok){
             const otpData=await otpRes.json();
@@ -303,10 +320,10 @@ async function connectDeriv(){
             if(!isTrustedDerivSocketURL(wsUrl)) throw new Error('Deriv returned an untrusted WebSocket URL');
             openNewDerivWS(wsUrl, target);
             return;
-          }
-        }
-      }
-    }catch(e){ logConn('New API check failed. Trying WebSocket endpoints…'); }
+          }else logConn(`Deriv OTP request returned HTTP ${otpRes.status || 'error'}. Trying the legacy WebSocket.`);
+        }else logConn('Deriv returned no accounts. Trying the legacy WebSocket.');
+      }else logConn(`Deriv account request returned HTTP ${accRes.status || 'error'}. Trying the legacy WebSocket.`);
+    }catch(e){ if(generation!==_connectionGeneration) return; logConn(e.name==='TimeoutError'?'Deriv REST request timed out. Trying the legacy WebSocket.':'Deriv REST request failed (network, browser policy, or invalid response). Trying the legacy WebSocket.'); }
   }
   if(generation===_connectionGeneration) tryConnect(token);
 }
@@ -317,7 +334,7 @@ function openNewDerivWS(wsUrl, acc){
   ws.onopen=()=>{
     if(S.ws!==ws) return;
     activateLiveFeed(ws);
-    S.connected=true; S.balance=acc.balance==null?NaN:Number(acc.balance); S.currency=acc.currency||'USD';
+    setConnecting(false); S.connected=true; S.balance=acc.balance==null?NaN:Number(acc.balance); S.currency=acc.currency||'USD';
     S.isDemo=isVerifiedDemoAccount(acc); S.accountId=String(acc.account_id||acc.loginid||acc.id||''); S.accountName=S.accountId||'Deriv';
     updateConnUI(); resumeAccountTracking(ws); saveTabConnection();
     logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
@@ -335,7 +352,7 @@ function openNewDerivWS(wsUrl, acc){
     // Account settlement is not yet reconciled into simulator statistics.
     if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
   };
-  ws.onclose=(ev)=>{ if(S.ws!==ws) return; if(S.auto.running && S.auto.mode==='account') stopAutoTrader(); failManualOrder('Connection closed; check your Deriv account before placing another order.'); logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); };
+  ws.onclose=(ev)=>{ if(S.ws!==ws) return; if(S.auto.running && S.auto.mode==='account') stopAutoTrader(); failManualOrder('Connection closed; check your Deriv account before placing another order.'); logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; setConnecting(false); S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); };
   ws.onerror=()=>{ logConn('WebSocket error.'); };
 }
 function tryConnect(token){
@@ -344,7 +361,7 @@ function tryConnect(token){
   const ep=DERIV_ENDPOINTS[_epIdx];
   logConn('Connecting to Deriv WebSocket API…');
   let authorized=false;
-  let ws; try{ ws=new WebSocket(derivURL(ep)); }catch(e){ logConn('⚠️ WebSocket not supported in this browser.'); return; }
+  let ws; try{ ws=new WebSocket(derivURL(ep)); }catch(e){ setConnecting(false); logConn('⚠️ WebSocket could not be created in this browser.'); return; }
   S.ws=ws;
   _connTimer=setTimeout(()=>{ if(ws.readyState===0){ logConn('⏱️ Connection timed out — trying next endpoint…'); try{ws.close();}catch(e){} } }, 10000);
   ws.onopen=()=>{
@@ -361,8 +378,8 @@ function tryConnect(token){
     const marketHandled=handleMarketDiscovery(d,ws);
     if(d.tick) receiveDerivTick(d.tick,ws);
     if(d.active_symbols){ logConn(`Received ${d.active_symbols.length} active symbols from Deriv.`); }
-    if(d.authorize && d.req_id===3 && !authorized){ authorized=true; activateLiveFeed(ws); S.connected=true; S.balance=+d.authorize.balance; S.currency=d.authorize.currency; S.isDemo=isVerifiedDemoAccount(d.authorize); S.accountId=String(d.authorize.loginid||''); S.accountName=S.accountId||'Deriv'; updateConnUI(); resumeAccountTracking(ws); saveTabConnection(); try{ws.send(JSON.stringify({balance:1,subscribe:1}));}catch(e){} logConn(`✅ Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'} account)`); toast('Connected to Deriv — balance '+fmt(S.balance)); fetchPortfolio(); }
-    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
+    if(d.authorize && d.req_id===3 && !authorized){ authorized=true; activateLiveFeed(ws); setConnecting(false); S.connected=true; S.balance=+d.authorize.balance; S.currency=d.authorize.currency; S.isDemo=isVerifiedDemoAccount(d.authorize); S.accountId=String(d.authorize.loginid||''); S.accountName=S.accountId||'Deriv'; updateConnUI(); resumeAccountTracking(ws); saveTabConnection(); try{ws.send(JSON.stringify({balance:1,subscribe:1}));}catch(e){} logConn(`✅ Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'} account)`); toast('Connected to Deriv — balance '+fmt(S.balance)); fetchPortfolio(); }
+    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); if(d.req_id===3 && !authorized){ _epIdx=DERIV_ENDPOINTS.length-1; ws.close(); return; } }
     if(d.balance){ const newBal=Number(d.balance.balance); if(Number.isFinite(newBal)){ S.balance=newBal; updateConnUI(); } }
     handleManualOrderMessage(d, ws);
     handleAccountContractMessage(d,ws);
@@ -377,14 +394,14 @@ function tryConnect(token){
     clearTimeout(_connTimer);
     logConn(`WebSocket closed (code ${ev.code}${ev.reason?': '+ev.reason:''}).`);
     if(!S.connected && _epIdx < DERIV_ENDPOINTS.length-1){ _epIdx++; logConn('🔄 Trying fallback endpoint…'); const generation=_connectionGeneration; setTimeout(()=>{ if(generation===_connectionGeneration) tryConnect(token); },800); }
-    else if(!S.connected){ logConn('⚠️ Could not connect to Deriv. Tips: (1) Create your OWN App ID at api.deriv.com (1089 is shared & often blocked), (2) Disable ad-blocker/VPN, (3) Try Chrome. Demo feed still running.'); }
+    else if(!S.connected){ setConnecting(false); logConn('Could not connect to Deriv. Check network access, browser restrictions and App ID, then retry.'); }
     S.connected=false; S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking();
   };
   ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
-function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
+function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; setConnecting(false); if(_restAbort){_restAbort.abort(); _restAbort=null;} clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
 function switchAccountMode(mode){
-  if(S.connected || S.ws) disconnectDeriv({preserveToken:true});
+  if(S.connected || S.ws || _connecting) disconnectDeriv({preserveToken:true});
   if(S.isDemo!==(mode==='demo')) clearTabConnection();
   S.isDemo=(mode==='demo');
   localStorage.setItem('dbx_isdemo', S.isDemo?'1':'0');
