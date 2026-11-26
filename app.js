@@ -150,7 +150,22 @@ function openNewDerivWS(wsUrl, acc){
       }
     }
     if(d.proposal && d.proposal.id){ ws.send(JSON.stringify({buy:d.proposal.id, price:d.proposal.ask_price||100})); }
-    if(d.buy){ toast(`✅ Trade executed on Deriv! ID ${d.buy.contract_id}`); addAlert(`Trade executed on Deriv: ${d.buy.contract_id}`); }
+    if(d.buy){
+      toast(`✅ Trade executed on Deriv! ID ${d.buy.contract_id}`);
+      addAlert(`Trade executed on Deriv: ${d.buy.contract_id}`);
+      try{ ws.send(JSON.stringify({proposal_open_contract:1, contract_id:d.buy.contract_id, subscribe:1})); }catch(e){}
+    }
+    if(d.proposal_open_contract && d.proposal_open_contract.is_sold){
+      const poc=d.proposal_open_contract;
+      const profit=+(poc.profit!==undefined?poc.profit:(poc.sell_price-poc.buy_price)||0);
+      if(profit<0 && S.auto.startBalance!==undefined){
+        S.auto.losses++;
+        S.auto.pnl=S.balance-S.auto.startBalance;
+        autoLog(`❌ LOSS -$${fmt(Math.abs(profit))} · Session P/L ${S.auto.pnl>=0?'+':''}$${fmt(S.auto.pnl)}`,'loss');
+        renderAutoStats();
+      }
+      if(poc.id){ try{ws.send(JSON.stringify({forget:poc.id}));}catch(e){} }
+    }
     if(d.error){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
   };
   ws.onclose=(ev)=>{ logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; updateConnUI(); };
