@@ -596,6 +596,12 @@ function onAutoSettle(entry){
   if(S.auto.lossStreak>=3 && S.builderBlocks.includes('stop')){ autoLog('Builder stop: 3 consecutive losses','warn'); stopAutoTrader(); }
   renderAutoStats();
 }
+function resetAutoStats(){
+  S.auto={...S.auto,trades:0,wins:0,losses:0,pnl:0,lossStreak:0,startBalance:S.balance,curStake:S.auto.stake||0.35};
+  if($('autoLog')) $('autoLog').innerHTML='';
+  renderAutoStats();
+  toast('Auto-Trader stats reset');
+}
 function renderAutoStats(){
   const a=S.auto;
   const totalStake=a.trades*(a.stake||0);
