@@ -4,7 +4,7 @@ Your site is a **static site** (no build step, no backend) — Render deploys it
 
 ## Option A — Blueprint (fastest, 1 click after connect)
 
-1. Push this repo to GitHub (already done — branch `arena/55f7f22f-derivbot`)
+1. Push the current branch `arena/56b7229f-derivbot` to GitHub
 2. Go to [Render Dashboard](https://dashboard.render.com/) → sign up / log in (free)
 3. Click **New → Blueprint**
 4. Connect GitHub → select **`geekyacehub/Derivbot`**
@@ -17,7 +17,7 @@ Your site is a **static site** (no build step, no backend) — Render deploys it
 2. Connect GitHub → select **`geekyacehub/Derivbot`**
 3. Fill in:
    - **Name:** `derivbot-pro-x`
-   - **Branch:** `arena/55f7f22f-derivbot` (or `main` after you merge)
+   - **Branch:** `arena/56b7229f-derivbot` (or `main` after you merge)
    - **Build Command:** *(leave empty)*
    - **Publish Directory:** `.`
 4. Click **Create Static Site** → live in ~1 minute
@@ -27,13 +27,13 @@ Your site is a **static site** (no build step, no backend) — Render deploys it
 - Open your new `https://derivbot-pro-x.onrender.com` URL
 - Click **Connect Deriv** in the left sidebar
 - Paste your Deriv API Token → **Connect & Authorize**
-- Done — trade from anywhere, on any device
+- The account integration is experimental and has not been tested against Deriv. Verify on a demo account before placing any order.
 
 ## Notes
 
 - **Free tier:** Render static sites are free forever. No credit card needed.
 - **Custom domain (optional):** Render → your service → Settings → Custom Domains → add your own domain.
-- **Auto-deploy:** Every `git push` to the branch auto-deploys the new version.
+- **Auto-deploy:** A push triggers auto-deploy only when the Render service is configured to watch that branch and auto-deploy is enabled.
 - **No environment variables needed** — the Deriv App ID (`1089`) and your token are entered in the browser UI, not on the server.
 - **HTTPS:** Render gives you free HTTPS automatically — required for the Deriv WebSocket connection.
 

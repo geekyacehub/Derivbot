@@ -1,6 +1,6 @@
 # Render Blueprint — DerivBot Pro X (100% Free, Static Site)
 # Deploy: Render Dashboard → New → Blueprint → connect this repo
-# Or manually: New → Static Site → Repo: geekyacehub/Derivbot, Branch: arena/55f7f22f-derivbot
+# Or manually: New → Static Site → Repo: geekyacehub/Derivbot, Branch: arena/56b7229f-derivbot
 services:
   - type: web
     name: derivbot-pro-x
@@ -18,3 +18,6 @@ services:
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
