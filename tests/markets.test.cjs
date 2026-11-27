@@ -221,6 +221,13 @@ function searchHarness(){
  }
  assert.equal(ws.sent.filter(x=>x.proposal).length,6,'bounded search');
  assert.equal(ws.sent.filter(x=>x.buy).length,0); assert.equal(h.run('S.auto.running'),false);
+ assert.match(h.el('autoLog').innerHTML,/Quote skipped: potential profit/,'final rejection must be visible');
+}
+{
+ const {h,ws}=searchHarness(); const q=ws.sent.filter(x=>x.proposal).at(-1);
+ ws.message({req_id:q.req_id,error:{message:'<script>service refused quote</script>'}});
+ assert.equal(ws.sent.filter(x=>x.buy).length,0);
+ assert.match(h.el('autoLog').innerHTML,/Deriv order error: &lt;script&gt;service refused quote&lt;\/script&gt;/,'error should be visible and escaped');
 }
 for(const change of ['stopAutoTrader()', 'S.balance=0.5', 'Date.now=()=>110001', "S.accountId='VRTC2'"]){
  const {h,ws}=searchHarness();const q=ws.sent.filter(x=>x.proposal).at(-1);
