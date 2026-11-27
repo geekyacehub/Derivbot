@@ -270,6 +270,7 @@
           <label class="check"><input type="checkbox" id="autoQuoteSearch"> Over/Under only: check up to 6 quotes for the minimum win profit</label>
           <p class="muted small">Experimental: past digit frequencies do not predict wins. The first quote meeting the minimum may be bought; this does not guarantee profit.</p>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
+          <div class="card" style="margin:12px 0"><b>Automatic demo start</b><p class="muted small">Arm the current settings for one automatic session in this tab within 8 hours. Waits for the connected demo account and live ticks. Stops or disconnects do not restart it; keep the tab open to monitor it. Duplicated or restored tabs may copy consent.</p><p id="autoStartStatus" role="status">Not armed.</p><div class="btn-row"><button class="btn btn-outline btn-sm" onclick="armDemoAutoStart()">Arm automatic demo start</button><button class="btn btn-outline btn-sm" onclick="disarmDemoAutoStart()">Cancel auto-start</button></div></div>
           <div class="btn-row"><button class="btn btn-green btn-lg" id="autoStartBtn" onclick="toggleAutoTrader()">▶ START AUTO-TRADER</button><button class="btn btn-red2" onclick="stopAutoTrader()">■ Stop</button></div>
           <div class="auto-stats" id="autoStats"></div>
           <button class="btn btn-outline btn-sm btn-block" onclick="resetAutoStats()" style="margin-top:10px">Reset</button>

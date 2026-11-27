@@ -154,3 +154,5 @@ The trade screen can request read-only pages of up to 100 account transactions e
 Statement pages share an end-time cutoff, but offsets may still shift as account history changes. Corrupted local order or contract records raise a warning and block new orders until verified and acknowledged.
 
 Demo Over/Under Sniper has an opt-in quote search for a user-set positive minimum potential profit. It checks at most six candidates in observed-frequency order and may buy the first quote meeting the minimum; it stops if none qualifies. Observed scores are not forecasts, and this does not establish that expected returns or win rates improve. This new search has not been verified live.
+
+An opt-in automatic demo start can arm the current settings for one session in the current tab, for up to eight hours. It waits for the matching demo account and verified live ticks; consent is consumed before starting. It does not automatically start a second session after a stop or disconnect. Tab duplication/session restoration can copy sessionStorage, so avoid duplicating an armed tab. The tab must remain open, controls are local and broker integration remains experimental.

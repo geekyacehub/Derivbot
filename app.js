@@ -194,6 +194,7 @@ function handleMarketDiscovery(d,ws){
     S.activeMarkets.filter(sym=>SYMBOLS.find(s=>s.sym===sym && !s.liveOnly)).forEach(sym=>subscribeLiveSymbol(sym));
     subscribeLiveSymbol(S.selected);
     renderMarketSelectors();
+    prepareDemoAutoStartMarket();
     logConn(`Deriv reported ${S.activeMarkets.length} active markets; additional markets load ticks when selected.`);
     return true;
   }
@@ -246,7 +247,7 @@ function receiveDerivTick(tick,ws){
   S.tickCount++; S.tickCounts[sym]=(S.tickCounts[sym]||0)+1; S.tickTimes[sym]=Date.now();
   if(sym===S.selected) refreshFeedStatus();
   resolveAI(sym,quote);
-  buildCandles(sym,S.tf); onTick(sym);
+  buildCandles(sym,S.tf); maybeStartArmedDemo(sym); onTick(sym);
 }
 
 /* ================= DERIV WEBSOCKET ================= */
@@ -435,7 +436,7 @@ function tryConnect(token){
   };
   ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
-function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; setConnecting(false); if(_restAbort){_restAbort.abort(); _restAbort=null;} clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; invalidatePortfolio(); if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
+function disconnectDeriv(options={}){ const autoCleared=disarmDemoAutoStart(false); let storageCleared=true; ++_connectionGeneration; setConnecting(false); if(_restAbort){_restAbort.abort(); _restAbort=null;} clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; invalidatePortfolio(); if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared && autoCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
 function switchAccountMode(mode){
   if(S.connected || S.ws || _connecting) disconnectDeriv({preserveToken:true});
   if(S.isDemo!==(mode==='demo')) clearTabConnection();
@@ -1119,10 +1120,58 @@ function runBuilderBot(){ if(!S.builderBlocks.length) return toast('Build a flow
 
 /* ================= AUTO-TRADER ================= */
 const STRATEGIES={multi_market:'Multi-Market Frequency Scanner',digit_ensemble:'Digit Transition Ensemble',one_tick_momentum:'One-Tick Momentum',macd_cross:'MACD Crossover',bb_squeeze:'Bollinger Squeeze',diff_cold:'Cold Digit Differs',over1_under8:'Over 1 / Under 8',parity_reversal:'Parity Streak Reversal',titan_ai:'Titan AI Multi-Market Pro',over_under:'Over/Under Sniper',even_odd:'Even/Odd Hunter',matches:'Matches/Differs Pro',martingale:'Martingale Classic',dalembert:"D'Alembert Bot",boom_crash:'Boom/Crash Spike',step:'Step Index Walker',rsi:'RSI Mean-Reversion',dcircles:'D-Circles Bot',rise_fall:'Rise/Fall Momentum',ai_recovery:'Apex Bot 2026 (AI Recovery)',speedbot:'Speedbot',custom:'Custom Builder Bot'};
+// Explicit, short-lived, one-session consent; no credentials are stored here.
+const DEMO_AUTO_KEY='dbx_demo_auto_once_v1', DEMO_AUTO_PERMIT={};
+function validDemoAutoStart(c){
+    if(!c || c.version!==1 || typeof c.accountId!=='string' || !c.accountId || typeof c.currency!=='string' || !c.currency || !Number.isFinite(c.expiresAt) || c.expiresAt<=Date.now() || c.expiresAt>Date.now()+8*3600000 || typeof c.strategy!=='string' || !Object.hasOwn(STRATEGIES,c.strategy) || ['custom','multi_market'].includes(c.strategy) || typeof c.symbol!=='string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(c.symbol) || !['none','dalembert','ai','martingale','fibonacci','oscar','paroli'].includes(c.recovery) || !Number.isFinite(c.stake) || c.stake<=0 || !Number.isInteger(c.maxTrades) || c.maxTrades<1 || c.maxTrades>100 || !Number.isFinite(c.tp) || c.tp<=0 || !Number.isFinite(c.sl) || c.sl<=0 || !Number.isFinite(c.conf) || c.conf<0 || c.conf>100 || !Number.isFinite(c.minProfit) || c.minProfit<0 || typeof c.quoteSearch!=='boolean' || (c.quoteSearch && (c.strategy!=='over_under' || c.minProfit<=0)) || typeof c.guard!=='boolean') return false;
+    return true;
+}
+function readDemoAutoStart(){
+  try{const c=JSON.parse(sessionStorage.getItem(DEMO_AUTO_KEY)||'null'); return validDemoAutoStart(c)?c:null;}catch(e){return null;}
+}
+function renderDemoAutoStart(){
+  const el=$('autoStartStatus'); if(!el) return;
+  const c=readDemoAutoStart();
+  el.textContent=c?`Armed for one demo session: ${c.strategy} on ${c.symbol}, up to ${c.maxTrades} trades. Expires ${new Date(c.expiresAt).toLocaleTimeString()}.`:'Not armed.';
+}
+function disarmDemoAutoStart(notify=true){
+  try{sessionStorage.removeItem(DEMO_AUTO_KEY); if(sessionStorage.getItem(DEMO_AUTO_KEY)!==null) throw Error('not removed');}
+  catch(e){ if(notify) toast('Could not cancel auto-start. Close this tab or clear its site data.'); return false; }
+  renderDemoAutoStart(); if(notify) toast('Automatic demo start cancelled.'); return true;
+}
+function armDemoAutoStart(){
+  if(!S.connected || !S.isDemo || S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !S.accountId) return toast('Connect a demo account before arming auto-start.');
+  if(S.auto.running || S.manualOrder || S.uncertainOrder || (S.accountContracts||[]).some(c=>c.accountId===S.accountId && c.status==='OPEN')) return toast('Stop the bot and resolve pending or locally tracked open orders first.');
+  const c={version:1,accountId:S.accountId,currency:S.currency,expiresAt:Date.now()+8*3600000,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:Number($('autoStake').value),maxTrades:Number($('autoMaxTrades').value),tp:Number($('autoTP').value),sl:Number($('autoSL').value),conf:Number($('autoConf').value),minProfit:Number($('autoMinProfit').value),recovery:$('autoRecovery').value,quoteSearch:!!$('autoQuoteSearch').checked,guard:!!$('autoGuard').checked};
+  if(!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(c.symbol) || !validRiskSettings(S.risk) || !Number.isFinite(S.balance) || c.stake>S.balance || c.stake>S.balance*S.risk.maxStakePct/100 || c.stake>c.sl || c.stake>S.risk.dailyLoss) return toast('Check the market, account balance and risk limits before arming.');
+  if(!validDemoAutoStart(c)) return toast('Check the bot settings; auto-start supports one to 100 trades and demo-compatible strategies.');
+  const account=S.accountId, ws=S.ws;
+  if(!window.confirm(`ARM ONE AUTOMATIC DEMO SESSION?\n${c.strategy} on ${c.symbol}; stake ${c.stake} ${c.currency}; maximum ${c.maxTrades} trades; take profit ${c.tp}; stop loss ${c.sl}; score ${c.conf}%; recovery ${c.recovery}; minimum quoted win profit ${c.minProfit}; quote search ${c.quoteSearch?'on':'off'}; drawdown guard ${c.guard?'on':'off'}.\n\nThis tab may start and buy automatically when data is ready, including after a refresh. Consent expires in 8 hours and is used once. Closing, duplicating, or restoring tabs may affect tab storage; copies may start separate sessions. Limits are local and cannot guarantee protection. Continue?`)) return;
+  if(!S.connected || !S.isDemo || S.accountId!==account || S.ws!==ws || ws.readyState!==1 || S.auto.running || S.manualOrder || S.uncertainOrder) return toast('Account changed; auto-start not armed.');
+  try{sessionStorage.setItem(DEMO_AUTO_KEY,JSON.stringify(c)); if(!readDemoAutoStart()) throw Error('not saved');}
+  catch(e){return toast('Could not save auto-start consent.');}
+  renderDemoAutoStart(); prepareDemoAutoStartMarket(); toast('One automatic demo session armed; waiting for verified ticks.');
+}
+function prepareDemoAutoStartMarket(){
+  const c=readDemoAutoStart();
+  if(c && S.connected && S.isDemo && S.accountId===c.accountId && S.currency===c.currency && Array.isArray(S.activeMarkets) && S.activeMarkets.includes(c.symbol)) subscribeLiveSymbol(c.symbol);
+}
+function maybeStartArmedDemo(sym){
+  const c=readDemoAutoStart();
+  if(!c || sym!==c.symbol || !S.connected || !S.isDemo || S.feed!=='deriv' || S.accountId!==c.accountId || S.currency!==c.currency || !S.ws || S.ws.readyState!==1 || S.auto.running || S.manualOrder || S.uncertainOrder || (S.accountContracts||[]).some(x=>x.accountId===c.accountId && x.status==='OPEN') || !S.activeMarkets?.includes(sym) || S.precisionKnown[sym]===undefined || (S.ticks[sym]||[]).length<50 || !S.tickTimes[sym] || Date.now()-S.tickTimes[sym]>10000) return;
+  if(!validRiskSettings(S.risk) || !Number.isFinite(S.balance) || c.stake>S.balance || c.stake>S.balance*S.risk.maxStakePct/100 || c.stake>c.sl || c.stake>S.risk.dailyLoss){ disarmDemoAutoStart(false); logConn('Automatic demo start cancelled: account or risk limits changed.'); return; }
+  // Consume before starting; a reload, storage failure or disconnect cannot restart it.
+  if(!disarmDemoAutoStart(false)){ logConn('Automatic demo start cancelled: tab storage unavailable.'); return; }
+  for(const [id,value] of Object.entries({autoStrategy:c.strategy,autoSymbol:c.symbol,autoStake:c.stake,autoMaxTrades:c.maxTrades,autoTP:c.tp,autoSL:c.sl,autoConf:c.conf,autoMinProfit:c.minProfit,autoRecovery:c.recovery})) $(id).value=String(value);
+  $('autoQuoteSearch').checked=c.quoteSearch; $('autoGuard').checked=c.guard;
+  startAutoTrader(DEMO_AUTO_PERMIT);
+  if(S.auto.running) autoLog('Automatically started the one authorized demo session.','warn');
+}
 function autoLog(msg,cls='info'){ const style=['info','win','loss','warn'].includes(cls)?cls:'info'; S.auto.log.unshift(`<div class="${style}">[${new Date().toLocaleTimeString()}] ${htmlEscape(msg)}</div>`); if(S.auto.log.length>120)S.auto.log.pop(); $('autoLog').innerHTML=S.auto.log.join(''); }
 function clearAutoLog(){ S.auto.log=[]; $('autoLog').innerHTML=''; }
 function toggleAutoTrader(){ S.auto.running? stopAutoTrader() : startAutoTrader(); }
-function startAutoTrader(){
+function startAutoTrader(permit){
+  if(permit!==DEMO_AUTO_PERMIT && !disarmDemoAutoStart(false) && typeof sessionStorage!=='undefined') return toast('Could not clear auto-start consent; close this tab or clear site data.');
   if(REAL_DATA_ONLY && !S.connected) return toast('Connect a Deriv demo account to use the bot.');
   if(S.openContracts.some(c=>c.auto)) return toast('Wait for the previous simulated bot contract to settle.');
   if(!Number.isFinite(+$('autoStake').value) || +$('autoStake').value<=0 || !Number.isInteger(+$('autoMaxTrades').value) || +$('autoMaxTrades').value<1 || !Number.isFinite(+$('autoTP').value) || +$('autoTP').value<=0 || !Number.isFinite(+$('autoSL').value) || +$('autoSL').value<=0 || !Number.isFinite(+$('autoConf').value) || +$('autoConf').value<0 || +$('autoConf').value>100) return toast('Check the stake, trade limit, take profit, stop loss and confidence (0–100).');
@@ -1144,7 +1193,7 @@ function startAutoTrader(){
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
     if(+$('autoStake').value>S.balance*S.risk.maxStakePct/100 || +$('autoStake').value>S.balance || +$('autoStake').value>+$('autoSL').value || +$('autoStake').value>S.risk.dailyLoss) return toast('Base stake exceeds an account balance, stake or session loss limit.');
     const accountAtConfirm=S.accountId, wsAtConfirm=S.ws;
-    const confirmed=window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; quote search: ${quoteSearch?'up to 6 Over/Under quotes':'off'}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
+    const confirmed=permit===DEMO_AUTO_PERMIT || window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; quote search: ${quoteSearch?'up to 6 Over/Under quotes':'off'}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
     if(!confirmed) return;
     if(!S.connected || !S.isDemo || S.accountId!==accountAtConfirm || S.ws!==wsAtConfirm || wsAtConfirm.readyState!==1 || S.manualOrder || S.uncertainOrder) return toast('Account or connection changed; bot was not started.');
   }else if(chosenRecovery!=='kelly'){
@@ -1159,7 +1208,7 @@ function startAutoTrader(){
 function checkAutoTimer(){
   if(S.auto.running && S.risk.timer>0 && Date.now()-S.auto.startedAt>=S.risk.timer*60000){ autoLog('Session timer reached — stopping after any open contract settles','warn'); stopAutoTrader(); }
 }
-function stopAutoTrader(){ S.auto.running=false; if(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='proposal'){ S.manualOrder=null; renderAccountTracking(); } const outstanding=(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='buy') || (Array.isArray(S.accountContracts) && S.accountContracts.some(c=>c.botSessionId && c.botSessionId===S.auto.sessionId && c.status==='OPEN')); $('autoBadge').textContent='STOPPED'; $('autoBadge').style.background=''; $('autoPill').textContent='OFF'; $('autoStartBtn').textContent='▶ START AUTO-TRADER'; autoLog(outstanding?'■ Bot stopped. A submitted or open account contract may still settle.':'■ Auto-Trader stopped','warn'); }
+function stopAutoTrader(){ const disarmed=disarmDemoAutoStart(false); if(!disarmed) toast('Could not clear auto-start consent; close this tab or clear site data.'); S.auto.running=false; if(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='proposal'){ S.manualOrder=null; renderAccountTracking(); } const outstanding=(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='buy') || (Array.isArray(S.accountContracts) && S.accountContracts.some(c=>c.botSessionId && c.botSessionId===S.auto.sessionId && c.status==='OPEN')); $('autoBadge').textContent='STOPPED'; $('autoBadge').style.background=''; $('autoPill').textContent='OFF'; $('autoStartBtn').textContent='▶ START AUTO-TRADER'; autoLog(outstanding?'■ Bot stopped. A submitted or open account contract may still settle.':'■ Auto-Trader stopped','warn'); }
 function autoDecision(sym, strat=S.auto.strategy, ticks=S.ticks[sym]||[], blocks=S.builderBlocks){
   const st=digitStats(sym,ticks);
   if(ticks.length<50 || (REAL_DATA_ONLY && S.feed==='deriv' && S.precisionKnown[sym]===undefined)) return null;
@@ -1803,7 +1852,7 @@ function init(){
   // restore
   const savedApp=localStorage.getItem('dbx_appid'); if(savedApp){ $('appIdInput').value=savedApp; S.appId=savedApp; }
   const savedDemo=localStorage.getItem('dbx_isdemo'); if(savedDemo!==null) S.isDemo=(savedDemo==='1');
-  restoreTabConnection();
+  restoreTabConnection(); renderDemoAutoStart();
   if($('btnDemoAcc')) $('btnDemoAcc').className='btn '+(S.isDemo?'btn-outline':'btn-ghost')+' btn-sm'; if($('btnRealAcc')) $('btnRealAcc').className='btn '+(!S.isDemo?'btn-red':'btn-ghost')+' btn-sm';
   const oauthURL=`https://app.deriv.com/oauth2/authorize?app_id=${S.appId}&redirect_uri=${encodeURIComponent(location.origin+location.pathname)}&scope=trade,accounts_read`;
   if($('oauthLink')) $('oauthLink').href=oauthURL;
