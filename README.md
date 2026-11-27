@@ -138,3 +138,15 @@ Bot settings can be exported and imported as JSON on the Connect page. The expor
 With Node.js 22 or later and network access to Deriv, run `node scripts/check-deriv-public.cjs`. Set `DERIV_APP_ID` and optionally `DERIV_SYMBOL` as environment variables if needed. The test subscribes to one public tick, reports its quote and precision metadata, and sends no credentials or orders. It does **not** test authorization, buying, settlement, or the app's full integration. The sandbox used for development could not connect to Deriv, so a successful live run remains outstanding.
 
 When connected, the app requests Deriv’s active-symbol list and lists supported symbol codes returned by the service and subscribes to additional markets when selected. Charts group observed live ticks and are not Deriv time-based candle charts. Signals are local calculations, not official Deriv signals. A failed discovery blocks account quotes and can be retried by reconnecting. Subscription failures remove the affected market for that session; reconnect to retry. API behavior still requires live verification.
+
+The next-digit model uses a smoothed recent-frequency prior and past observed transitions. Its score is an uncalibrated model estimate, not a Deriv quote or reliable probability. The evaluation separates model versions and compares Brier score with a uniform baseline; small samples are unreliable and past results do not establish future performance.
+
+Manual account orders recheck the current local balance, stake cap, account and market after quote confirmation; quotes held longer than 30 seconds require a new request. These browser-side checks do not account for activity on other devices and cannot guarantee loss protection.
+
+The manual trade page can request a read-only snapshot of Deriv open positions. It is not a live subscription, complete account history or settlement reconciliation; refresh it and verify in Deriv. An empty snapshot never clears an uncertain-buy warning.
+
+Demo bot sessions show win rate and profit factor from their locally tracked settlements. A minimum quoted win profit can reject small-payout quotes; it does not establish an edge or cap losses. Some presets share strategies; the simulator-only Kelly and multi-market presets cannot run in real-data mode. All bot execution and profitability remain unverified against Deriv.
+
+Bot strategy fixtures test preset wiring and deterministic signal behavior; they do not establish profitability. Direction scores include flat observed ticks and are not five-tick win-rate estimates. Builder flows require exactly one buy action.
+
+The trade screen can request a read-only snapshot of up to 100 recent account transactions and show matches to locally tracked contract IDs. It does not reconcile settlements or clear uncertain orders; check full history in Deriv. Demo bot session statistics include average win, loss and result per locally tracked settlement, not a future-return prediction.

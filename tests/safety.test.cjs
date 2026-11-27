@@ -226,7 +226,7 @@ console.log('One-tick and ensemble checks passed');
 run("renderAI=()=>{}; S.aiLog=[]; S.feed='simulation'; S.feedGeneration=80; S.selected='R_75'; S.ticks.R_75=[...Array(19).fill(100),100.09]; S.tickCounts.R_75=10;");
 run('aiPredict(false); aiPredict(true)');
 assert.equal(run('S.aiLog.length'),1,'one prediction per symbol tick');
-assert.equal(run('S.aiLog[0].dist.reduce((a,b)=>a+b,0)'),100,'missing transition row must fall back to frequencies');
+assert.ok(Math.abs(run('S.aiLog[0].dist.reduce((a,b)=>a+b,0)')-100)<1e-9,'scores must sum to 100');
 run("S.tickCounts.R_50=11; resolveAI('R_50',100.123)");
 assert.equal(run('S.aiLog[0].resolved'),null,'other symbols must not resolve this prediction');
 run("S.tickCounts.R_75=11; resolveAI('R_75',100.02)");
@@ -238,7 +238,7 @@ assert.equal(run('S.aiLog[0].actual'),null);
 run("aiPredict(false); expirePendingPredictions('Feed changed')");
 assert.equal(run('S.aiLog[0].expired'),'Feed changed');
 // Uniform ten-class probabilities have a multiclass Brier score of 0.9.
-run("var uniform={modelVersion:2,sym:'R_75',source:'simulation',resolved:true,digit:3,actual:3,dist:Array(10).fill(10)}; var other={...uniform,source:'deriv'}; var stats=aiCalibration([uniform,other], 'R_75','simulation')");
+run("var uniform={modelVersion:3,sym:'R_75',source:'simulation',resolved:true,digit:3,actual:3,dist:Array(10).fill(10)}; var other={...uniform,source:'deriv'}; var stats=aiCalibration([uniform,other], 'R_75','simulation')");
 assert.equal(run('stats.count'),1);
 assert.equal(run('stats.hitRate'),100);
 assert.ok(Math.abs(run('stats.brier')-.9)<1e-12);
@@ -354,6 +354,22 @@ const beforeLimitQuote=sent.length;
 run("handleManualOrderMessage({req_id:botReq,proposal:{id:'over-budget',ask_price:1,payout:1.95}},socket)");
 assert.equal(sent.length,beforeLimitQuote,'a stale risk budget must not result in a purchase');
 assert.equal(run('S.auto.running'),false);
+// Actual quoted profit, not the historical strategy score, gates a demo purchase.
+element('autoMinProfit').value='1';
+run("S.accountContracts=[]; S.manualOrder=null; S.uncertainOrder=null; S.auto.running=false; S.tickCounts.R_75++; S.tickTimes.R_75=Date.now(); startAutoTrader(); autoTick()");
+ctx.botReq=sent.at(-1).req_id;
+const beforeLowProfit=sent.length;
+run("handleManualOrderMessage({req_id:botReq,proposal:{id:'low-profit',ask_price:1,payout:1.95}},socket)");
+assert.equal(sent.length,beforeLowProfit,'below-minimum quote must not buy');
+assert.equal(run('S.auto.running'),false);
+assert.equal(run('S.uncertainOrder'),null);
+element('autoMinProfit').value='0.95';
+run("S.tickCounts.R_75++; S.tickTimes.R_75=Date.now(); startAutoTrader(); autoTick()");
+ctx.botReq=sent.at(-1).req_id;
+run("handleManualOrderMessage({req_id:botReq,proposal:{id:'at-minimum',ask_price:1,payout:1.95}},socket)");
+assert.equal(sent.at(-1).buy,'at-minimum');
+run("failManualOrder('test cleanup',true); S.uncertainOrder=null; stopAutoTrader()");
+element('autoMinProfit').value='0';
 // A stale market price must not trigger an account proposal.
 run("S.accountContracts=[]; S.manualOrder=null; S.uncertainOrder=null; S.auto.running=false; S.tickTimes.R_75=Date.now()-11000; startAutoTrader()");
 const beforeStale=sent.length;
@@ -382,3 +398,66 @@ run(`var aligned=Object.fromEntries(SYMBOLS.map(s=>[s.sym,splitFixture.slice()])
 assert.notEqual(run('multiSplit.first.stopReason'),'Aligned simulation markets required');
 assert.notEqual(run('multiSplit.second.stopReason'),'Aligned simulation markets required');
 console.log('Chronological split replay checks passed');
+// Sparse transitions use an explicit frequency prior, not a fixed 70% transition weight.
+run(`S.feed='simulation'; var sparse=Array.from({length:20},(_,i)=>i===0||i===19?100.09:100.00); var model=predictDistribution('R_75',sparse);`);
+assert.equal(run('model.transitions'),1);
+assert.ok(run('model.conf')<80,'one transition must not be presented as near-certain');
+assert.ok(Math.abs(run('model.dist.reduce((a,b)=>a+b,0)')-100)<1e-9);
+assert.equal(run('model.dist.every(v=>Number.isFinite(v)&&v>0)'),true);
+run(`var future=sparse.concat([100.05,100.06]); var observedOnly=predictDistribution('R_75',future.slice(0,20))`);
+assert.equal(run('JSON.stringify(observedOnly)'),run('JSON.stringify(model)'),'future observations cannot affect earlier prediction');
+assert.equal(run("predictDistribution('R_75',Array(19).fill(100))"),null);
+assert.ok(Math.abs(run("aiCalibration([uniform], 'R_75','simulation').brierSkill"))<1e-12);
+assert.equal(run("aiCalibration([{...uniform,modelVersion:2}], 'R_75','simulation').count"),0,'older model versions must not contaminate evaluation');
+// The scanner must use the least frequent digit for its strongest Differs frequency.
+run(`S.ticks={R_75:Array.from({length:90},(_,i)=>100+([0,1,2,3,4,6,7,8,9][i%9])/100)}; var scannerResult=computeSignals().find(x=>x.sym==='R_75')`);
+assert.equal(run('scannerResult.signal'),'DIFFERS 5');
+assert.equal(run('scannerResult.win'),100);
+console.log('Smoothed prediction, version isolation and frequency checks passed');
+// Every built-in preset refers to an implemented strategy and recognized sizing mode.
+assert.equal(run("defaultBots().length"),24);
+assert.equal(run("defaultBots().every(b=>Object.hasOwn(STRATEGIES,b.strategy) && (!b.recovery || ['none','dalembert','ai','martingale','fibonacci','oscar','paroli','kelly'].includes(b.recovery)))"),true);
+assert.equal(run("autoDecision('R_75','dcircles',[...Array(50).fill(100),...Array(10).fill(100.01)]).barrier"),2,'Differs should select a least-frequent digit');
+// Actual settled gains and losses, not strategy scores, form the session statistics.
+run("S.auto={mode:'account',strategy:'even_odd',running:false,stake:1,curStake:1,recovery:'none',pnl:0,wins:0,losses:0,lossStreak:0,totalPayout:0,log:[],recoveryState:{},trades:2}; onAutoSettle({type:'DIGITEVEN',stake:1,profit:.5,win:true}); onAutoSettle({type:'DIGITEVEN',stake:1,profit:-.8,win:false})");
+assert.ok(Math.abs(run('S.auto.totalPayout')-1.7)<1e-9,'partial payouts are included');
+assert.match(element('autoStats').innerHTML,/50\.0%/);
+assert.match(element('autoStats').innerHTML,/0\.63/);
+assert.match(element('autoStats').innerHTML,/USD 0\.50/);
+assert.match(element('autoStats').innerHTML,/USD 0\.80/);
+assert.match(element('autoStats').innerHTML,/USD -0\.15/);
+console.log('Preset mapping and settled performance checks passed');
+// Exercise every built-in preset's actual strategy on deterministic data. These are
+// implementation fixtures, not evidence of future performance or broker support.
+run(`
+ var presetTicks=Array.from({length:100},(_,i)=>100+[2,2,2,2,3][i%5]/100);
+ var flatMoveTicks=Array.from({length:100},(_,i)=>100+Math.floor(i/10)/100);
+ var boomTicks=[...Array(91).fill(100),...Array.from({length:9},(_,i)=>100+(i+1)*.1)];
+ var reversalTicks=[...Array.from({length:56},(_,i)=>100+(i%10)/100),100.02,100.04,100.06,100.08];
+ var crossEnd=crossTicks.findIndex((_,i)=>autoDecision('R_75','macd_cross',crossTicks.slice(0,i+1))?.type==='CALL');
+ var crossFixture=crossTicks.slice(0,crossEnd+1);
+ var presetFixtures={apex:presetTicks,speed:presetTicks,over:presetTicks,evenodd:presetTicks,match:presetTicks,mart:presetTicks,dal:presetTicks,boom:boomTicks,step:momentumTicks,rsi:momentumTicks,dcircles:presetTicks,risefall:momentumTicks,fib:presetTicks,oscar:presetTicks,antimart:presetTicks,kelly:presetTicks,macd:crossFixture,bb_squeeze:squeezeTicks,diff90:presetTicks,over1:presetTicks,ai_ens:ensembleTicks,v100_turbo:momentumTicks,streak_rev:reversalTicks};
+`);
+const expectedTypes={apex:'DIGITOVER',speed:'DIGITOVER',over:'DIGITOVER',evenodd:'DIGITEVEN',match:'DIGITDIFF',mart:'DIGITOVER',dal:'DIGITOVER',boom:'PUT',step:'CALL',rsi:'PUT',dcircles:'DIGITDIFF',risefall:'CALL',fib:'DIGITOVER',oscar:'DIGITOVER',antimart:'DIGITOVER',kelly:'DIGITOVER',macd:'CALL',bb_squeeze:'CALL',diff90:'DIGITDIFF',over1:'DIGITOVER',ai_ens:'DIGITEVEN',v100_turbo:'CALL',streak_rev:'DIGITODD'};
+for(const [id,type] of Object.entries(expectedTypes)){
+ ctx.presetId=id;
+ const decision=run("autoDecision('R_75',defaultBots().find(b=>b.id===presetId).strategy,presetFixtures[presetId])");
+ assert.ok(decision,`${id} should produce a signal for its fixture`);
+ assert.equal(decision.type,type,`${id} contract direction`);
+ assert.ok(Number.isFinite(decision.win) && decision.win>=0 && decision.win<=100,`${id} score range`);
+ assert.equal(decision.duration||5,id==='v100_turbo'?1:5,`${id} contract duration`);
+ if(decision.type.startsWith('DIGIT')) assert.ok(Number.isInteger(decision.barrier) && decision.barrier>=0 && decision.barrier<=9);
+}
+// Scanner uses separate per-market buffers, not the selected-symbol fixture.
+run("var scannerFixture={}; SYMBOLS.forEach(m=>scannerFixture[m.sym]=presetTicks)");
+assert.equal(run('scanMarkets(scannerFixture).type'),'DIGITOVER');
+assert.equal(run("defaultBots().find(b=>b.id==='scanner_bot').strategy"),'multi_market');
+assert.equal(Object.keys(expectedTypes).length+1,run('defaultBots().length'));
+// Flat moves are not discarded from bot direction scores, and ties do not signal.
+assert.ok(Math.abs(run("autoDecision('R_75','rise_fall',flatMoveTicks).win")-100*9/99)<1e-9);
+assert.equal(run("autoDecision('R_75','rise_fall',Array(100).fill(100))"),null);
+assert.equal(run("autoDecision('R_75','one_tick_momentum',[...Array(99).fill(100),100.01]).win"),10);
+assert.equal(run("autoDecision('R_75','boom_crash',boomTicks).win"),0,'spike score is observed opposite direction, not a fabricated fixed 60%');
+assert.equal(run("autoDecision('R_75','custom',presetTicks,['buy_even','buy_odd'])"),null,'ambiguous builder actions must not silently choose one');
+assert.equal(run("autoDecision('R_75','custom',presetTicks,['even'])"),null,'builder requires an action');
+console.log('All built-in preset signal fixture checks passed');
