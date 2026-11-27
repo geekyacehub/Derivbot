@@ -875,7 +875,20 @@ function handleManualOrderMessage(d, ws){
       if(!S.auto.running || S.auto.mode!=='account' || S.auto.sessionId!==order.botSessionId || !S.isDemo || Date.now()-order.createdAt>10000) return failManualOrder('Bot stopped, quote expired, or account changed; no purchase sent.');
       if(REAL_DATA_ONLY && (!S.tickTimes[order.symbol] || Date.now()-S.tickTimes[order.symbol]>10000 || S.precisionKnown[order.symbol]===undefined)) return failManualOrder('Market data became stale or precision is unavailable; no purchase sent.');
       const minimum=S.auto.minProfit ?? 0;
-      if(!Number.isFinite(minimum) || minimum<0 || payout-ask+1e-9<minimum) return failManualOrder(`Quote skipped: potential profit ${order.currency} ${fmt(payout-ask)} is below your minimum ${order.currency} ${fmt(minimum)}; no purchase sent.`);
+      if(!Number.isFinite(minimum) || minimum<0) return failManualOrder('Invalid minimum quoted profit; no purchase sent.');
+      if(order.scanStartedAt && Date.now()-order.scanStartedAt>10000) return failManualOrder('Quote search expired; no purchase sent.');
+      if(payout-ask+1e-9<minimum){
+        if(order.remainingCandidates && order.remainingCandidates.length){
+          const guard=checkAccountBotRisk(order.stake);
+          if(guard) return failManualOrder(guard);
+          if(!S.connected || S.ws!==ws || ws.readyState!==1 || order.accountId!==S.accountId || order.currency!==S.currency || S.uncertainOrder || (REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(order.symbol)))) return failManualOrder('Account or market changed; no purchase sent.');
+          autoLog(`Skipped ${order.type} ${order.barrier}: quoted profit ${order.currency} ${fmt(payout-ask)} below minimum; checking next quote.`, 'info');
+          const [next,...remaining]=order.remainingCandidates;
+          S.manualOrder=null; renderAccountTracking();
+          return requestDemoBotOrder(next,order.symbol,remaining,order.scanStartedAt);
+        }
+        return failManualOrder(`Quote skipped: potential profit ${order.currency} ${fmt(payout-ask)} is below your minimum ${order.currency} ${fmt(minimum)}; no purchase sent.`);
+      }
       autoLog(`Quote: cost ${order.currency} ${fmt(ask)}, potential profit ${order.currency} ${fmt(payout-ask)}, break-even win rate ${(ask/payout*100).toFixed(1)}%. Not a profit forecast.`, 'info');
       const guard=checkAccountBotRisk(ask);
       if(guard) return failManualOrder(guard);
@@ -1115,6 +1128,8 @@ function startAutoTrader(){
   if(!Number.isFinite(+$('autoStake').value) || +$('autoStake').value<=0 || !Number.isInteger(+$('autoMaxTrades').value) || +$('autoMaxTrades').value<1 || !Number.isFinite(+$('autoTP').value) || +$('autoTP').value<=0 || !Number.isFinite(+$('autoSL').value) || +$('autoSL').value<=0 || !Number.isFinite(+$('autoConf').value) || +$('autoConf').value<0 || +$('autoConf').value>100) return toast('Check the stake, trade limit, take profit, stop loss and confidence (0–100).');
   const minProfit=Number($('autoMinProfit').value);
   if(!Number.isFinite(minProfit) || minProfit<0) return toast('Enter a valid minimum quoted profit.');
+  const quoteSearch=!!$('autoQuoteSearch').checked;
+  if(quoteSearch && ($('autoStrategy').value!=='over_under' || minProfit<=0)) return toast('Quote search requires Over/Under Sniper and a positive minimum quoted profit.');
   if($('autoStrategy').value==='custom' && S.builderBlocks.filter(k=>BLOCKS[k] && BLOCKS[k].type==='act').length!==1) return toast('Builder needs exactly one buy action.');
   const chosenRecovery=($('autoStrategy').value==='custom' && S.builderBlocks.includes('martingale'))?'martingale':$('autoRecovery').value;
   if(!validRiskSettings(S.risk)) return toast('Save valid risk settings before starting.');
@@ -1129,13 +1144,13 @@ function startAutoTrader(){
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
     if(+$('autoStake').value>S.balance*S.risk.maxStakePct/100 || +$('autoStake').value>S.balance || +$('autoStake').value>+$('autoSL').value || +$('autoStake').value>S.risk.dailyLoss) return toast('Base stake exceeds an account balance, stake or session loss limit.');
     const accountAtConfirm=S.accountId, wsAtConfirm=S.ws;
-    const confirmed=window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
+    const confirmed=window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; quote search: ${quoteSearch?'up to 6 Over/Under quotes':'off'}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
     if(!confirmed) return;
     if(!S.connected || !S.isDemo || S.accountId!==accountAtConfirm || S.ws!==wsAtConfirm || wsAtConfirm.readyState!==1 || S.manualOrder || S.uncertainOrder) return toast('Account or connection changed; bot was not started.');
   }else if(chosenRecovery!=='kelly'){
     const riskError=checkSimulationRisk(+$('autoStake').value); if(riskError) return toast(riskError);
   }
-  S.auto={...S.auto,running:true,mode:accountMode?'account':'simulation',accountId:accountMode?S.accountId:'',sessionId:`${Date.now()}-${Math.random().toString(36).slice(2)}`,lastDecisionTick:-1,startedAt:Date.now(),startBalance:S.balance,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,minProfit,blocks:[...S.builderBlocks],maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:chosenRecovery,trades:0,wins:0,losses:0,breakEven:0,grossWins:0,grossLosses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},curStake:+$('autoStake').value,lossStreak:0};
+  S.auto={...S.auto,running:true,mode:accountMode?'account':'simulation',accountId:accountMode?S.accountId:'',sessionId:`${Date.now()}-${Math.random().toString(36).slice(2)}`,lastDecisionTick:-1,startedAt:Date.now(),startBalance:S.balance,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,minProfit,quoteSearch,blocks:[...S.builderBlocks],maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:chosenRecovery,trades:0,wins:0,losses:0,breakEven:0,grossWins:0,grossLosses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},curStake:+$('autoStake').value,lossStreak:0};
   $('autoBadge').textContent=accountMode?'DEMO ACCOUNT RUNNING':'SIMULATOR RUNNING'; $('autoBadge').style.background='rgba(0,208,156,.2)';
   $('autoPill').textContent='ON'; $('autoStartBtn').textContent='■ RUNNING…';
   autoLog(`▶ ${accountMode?'DERIV DEMO':'SIMULATOR'} Auto-Trader started — ${STRATEGIES[S.auto.strategy]} on ${S.auto.symbol}, stake ${S.auto.stake}, recovery ${S.auto.recovery}`,'warn');
@@ -1262,14 +1277,23 @@ function checkAccountBotRisk(stake){
   if(stake>S.auto.sl+S.auto.pnl+1e-9 || stake>S.risk.dailyLoss+Math.min(0,S.auto.pnl)+1e-9) return 'Next stake exceeds this bot session’s loss budget.';
   return null;
 }
-function requestDemoBotOrder(dec,sym){
+function requestDemoBotOrder(dec,sym,remainingCandidates=[],scanStartedAt=null){
   if(S.manualOrder || S.uncertainOrder || !S.auto.running) return;
   const req=++S.orderSeq, ws=S.ws, stake=S.auto.curStake, dur=dec.duration||5;
-  S.manualOrder={kind:'auto',phase:'proposal',req,symbol:sym,accountId:S.accountId,currency:S.currency,type:dec.type,barrier:dec.barrier,stake,dur,botSessionId:S.auto.sessionId,createdAt:Date.now()};
+  S.manualOrder={kind:'auto',phase:'proposal',req,symbol:sym,accountId:S.accountId,currency:S.currency,type:dec.type,barrier:dec.barrier,stake,dur,botSessionId:S.auto.sessionId,createdAt:Date.now(),remainingCandidates,scanStartedAt};
   try{ ws.send(JSON.stringify({proposal:1,amount:stake,basis:'stake',contract_type:dec.type,currency:S.currency,duration:dur,duration_unit:'t',underlying_symbol:sym,...(['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:String(dec.barrier)}:{}),req_id:req})); }
   catch(e){ failManualOrder('Could not request demo bot quote.'); return; }
   setTimeout(()=>{ if(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='proposal' && S.manualOrder.req===req) failManualOrder('Demo bot quote timed out; no purchase sent.'); },15000);
-  renderAccountTracking(); autoLog(`Demo quote requested: ${dec.type} ${sym} ${S.currency} ${fmt(stake)}.`, 'info');
+  renderAccountTracking(); autoLog(`Demo quote requested: ${dec.type}${['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?' '+dec.barrier:''} ${sym} ${S.currency} ${fmt(stake)}.`, 'info');
+}
+// Rank a bounded set by observed digit frequency, never as a forecast or edge.
+function overUnderQuoteCandidates(sym,ticks,minScore){
+  const st=digitStats(sym,ticks);
+  if(st.n<50) return [];
+  const candidates=[];
+  for(let barrier=0;barrier<=8;barrier++) candidates.push({type:'DIGITOVER',barrier,win:st.over[barrier]});
+  for(let barrier=1;barrier<=9;barrier++) candidates.push({type:'DIGITUNDER',barrier,win:st.under[barrier]});
+  return candidates.filter(c=>c.win>=minScore).sort((a,b)=>b.win-a.win || a.barrier-b.barrier || a.type.localeCompare(b.type)).slice(0,6);
 }
 function autoTick(){
   if(!S.auto.running) return;
@@ -1306,7 +1330,16 @@ function autoTick(){
   const riskError=accountMode?checkAccountBotRisk(S.auto.curStake):checkSimulationRisk(S.auto.curStake);
   if(riskError){ autoLog(riskError,'warn'); return stopAutoTrader(); }
   if(S.auto.curStake>S.auto.sl+S.auto.pnl+1e-9){ autoLog('Next stake exceeds the remaining simulated stop-loss budget','warn'); return stopAutoTrader(); }
-  if(accountMode){ requestDemoBotOrder(dec,sym); return; }
+  if(accountMode){
+    if(S.auto.quoteSearch){
+      const candidates=overUnderQuoteCandidates(sym,S.ticks[sym]||[],S.auto.conf);
+      if(!candidates.length){ autoLog('No Over/Under candidates meet the score filter; no quote sent.','warn'); return; }
+      const [first,...remaining]=candidates;
+      autoLog(`Checking up to ${candidates.length} quotes in observed-frequency order; not a win forecast.`, 'info');
+      requestDemoBotOrder(first,sym,remaining,Date.now());
+    }else requestDemoBotOrder(dec,sym);
+    return;
+  }
   const id='AUTO-'+Math.floor(rand(100000,999999));
   S.openContracts.push({id,type:dec.type,symbol:sym,stake:S.auto.curStake,barrier:dec.barrier,dur:dec.duration||5,entryTick:S.tickCounts[sym]||0,entryPrice:S.ticks[sym][S.ticks[sym].length-1],status:'OPEN',auto:true});
   S.auto.trades++; S.auto.totalStake=(S.auto.totalStake||0)+S.auto.curStake;

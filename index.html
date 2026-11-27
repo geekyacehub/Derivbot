@@ -267,6 +267,8 @@
             <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Fixed 1.5× after loss</option><option value="martingale">Martingale ×2</option><option value="fibonacci">Fibonacci</option><option value="oscar">Oscar-style cycle</option><option value="paroli">Paroli (3-win cap)</option></select></div>
           </div>
           <p class="muted small">Demo only. A quote below the minimum stops the bot; it does not limit losses or ensure profitability. Scores are uncalibrated; recovery can increase losses. Most contracts use five ticks; One-Tick Momentum uses one. Session statistics use locally tracked settlements; past results are not forecasts. Stop cannot cancel an open contract.</p>
+          <label class="check"><input type="checkbox" id="autoQuoteSearch"> Over/Under only: check up to 6 quotes for the minimum win profit</label>
+          <p class="muted small">Experimental: past digit frequencies do not predict wins. The first quote meeting the minimum may be bought; this does not guarantee profit.</p>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
           <div class="btn-row"><button class="btn btn-green btn-lg" id="autoStartBtn" onclick="toggleAutoTrader()">▶ START AUTO-TRADER</button><button class="btn btn-red2" onclick="stopAutoTrader()">■ Stop</button></div>
           <div class="auto-stats" id="autoStats"></div>

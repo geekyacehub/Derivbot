@@ -191,3 +191,41 @@ for(const kind of ['new','legacy']){
  assert.equal(ws.sent.some(x=>x.buy),false,'no purchase merely from requesting a quote');
 }
 console.log('Current proposal symbol schema checks passed');
+// Opt-in demo quote search skips low-profit quotes without buying them.
+function searchHarness(){
+ const h=harness();h.run("openNewDerivWS('wss://api.derivws.com/ws?otp=demo',{account_id:'VRTC1',account_type:'demo',currency:'USD',balance:1000})");
+ const ws=h.sockets[0];ws.open();const discovery=ws.sent.filter(x=>x.active_symbols).at(-1);
+ ws.message({req_id:discovery.req_id,active_symbols:[{underlying_symbol:'R_75'}]});
+ for(const [id,value] of Object.entries({autoStake:'1',autoMaxTrades:'1',autoTP:'10',autoSL:'1',autoConf:'0',autoMinProfit:'0.50',autoRecovery:'none',autoStrategy:'over_under',autoSymbol:'R_75'}))h.el(id).value=value;
+ h.el('autoQuoteSearch').checked=true;
+ h.run("Date.now=()=>100000; S.ticks.R_75=Array.from({length:100},(_,i)=>100+(i%10)/100); S.tickCounts.R_75=100; S.tickTimes.R_75=Date.now(); S.precisionKnown.R_75=2; startAutoTrader(); autoTick()");
+ return {h,ws};
+}
+{
+ const {h,ws}=searchHarness(); const q1=ws.sent.filter(x=>x.proposal).at(-1); assert.ok(q1);
+ ws.message({req_id:q1.req_id,proposal:{id:'low',ask_price:1,payout:1.09}});
+ const q2=ws.sent.filter(x=>x.proposal).at(-1);
+ assert.notEqual(q1.req_id,q2.req_id); assert.equal(ws.sent.filter(x=>x.buy).length,0);
+ assert.ok(q1.contract_type!==q2.contract_type || q1.barrier!==q2.barrier,'next quote is a different contract');
+ ws.message({req_id:q1.req_id,proposal:{id:'late',ask_price:1,payout:2}});
+ assert.equal(ws.sent.filter(x=>x.buy).length,0,'late quote cannot buy');
+ ws.message({req_id:q2.req_id,proposal:{id:'qualified',ask_price:1,payout:1.5}});
+ assert.equal(ws.sent.filter(x=>x.buy).length,1); assert.equal(ws.sent.filter(x=>x.buy)[0].buy,'qualified');
+ assert.ok(h.run('S.uncertainOrder'),'write-ahead marker retained');
+}
+{
+ const {h,ws}=searchHarness();
+ for(let i=0;i<6;i++){
+  const q=ws.sent.filter(x=>x.proposal).at(-1);
+  ws.message({req_id:q.req_id,proposal:{id:'low'+i,ask_price:1,payout:1.09}});
+ }
+ assert.equal(ws.sent.filter(x=>x.proposal).length,6,'bounded search');
+ assert.equal(ws.sent.filter(x=>x.buy).length,0); assert.equal(h.run('S.auto.running'),false);
+}
+for(const change of ['stopAutoTrader()', 'S.balance=0.5', 'Date.now=()=>110001', "S.accountId='VRTC2'"]){
+ const {h,ws}=searchHarness();const q=ws.sent.filter(x=>x.proposal).at(-1);
+ h.run(change); ws.message({req_id:q.req_id,proposal:{id:'low',ask_price:1,payout:1.09}});
+ assert.equal(ws.sent.filter(x=>x.proposal).length,1,`${change} cannot request another quote`);
+ assert.equal(ws.sent.filter(x=>x.buy).length,0,`${change} cannot buy`);
+}
+console.log('Bounded opt-in demo quote search checks passed');

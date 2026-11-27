@@ -45,3 +45,6 @@ Persisted local account orders and contract records are validated at startup, in
 
 ### Proposal symbol compatibility
 A demo-browser quote request reported `Input validation failed: symbol, underlying_symbol`. The current published Deriv proposal schema requires `underlying_symbol` and disallows extra fields; manual and bot proposal requests now send that field rather than `symbol`. Mock tests cover both connection paths. Live quote acceptance and compatibility with legacy endpoints remain unverified; no automatic order retry was added.
+
+### Bounded quote search
+The demo Over/Under strategy has an optional search across up to six candidate quotes, ordered by observed tick frequencies and restricted by the configured score threshold. It buys the first current quote meeting the user's minimum potential profit, not necessarily the highest-paying quote. No historical frequency is a validated probability or edge, and a greater payout can correspond to a lower chance of winning. Search stops on failure, stale data, elapsed time or risk/connection changes; rejected or late quotes cannot buy. This behavior has mocked tests only and is not a guarantee of execution or profitability. The user previously demonstrated one manually confirmed demo trade and one demo bot trade, but the search itself has not been tested live.

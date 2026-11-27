@@ -152,3 +152,5 @@ Bot strategy fixtures test preset wiring and deterministic signal behavior; they
 The trade screen can request read-only pages of up to 100 account transactions each and show matches to locally tracked contract IDs. It does not reconcile settlements or clear uncertain orders; check full history in Deriv. Demo bot session statistics include average win, loss and result per locally tracked settlement, not a future-return prediction.
 
 Statement pages share an end-time cutoff, but offsets may still shift as account history changes. Corrupted local order or contract records raise a warning and block new orders until verified and acknowledged.
+
+Demo Over/Under Sniper has an opt-in quote search for a user-set positive minimum potential profit. It checks at most six candidates in observed-frequency order and may buy the first quote meeting the minimum; it stops if none qualifies. Observed scores are not forecasts, and this does not establish that expected returns or win rates improve. This new search has not been verified live.
