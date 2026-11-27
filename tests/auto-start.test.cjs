@@ -67,3 +67,18 @@ console.log('One-session demo auto-start checks passed');
  h.run("S.ticks.R_75=Array(50).fill(100.01); S.precisionKnown.R_75=2; S.tickTimes.R_75=Date.now(); maybeStartArmedDemo('R_75')");
  assert.equal(h.run('S.auto.running'),false);
 }
+// Errors identify the actual field without storing consent or starting a trade.
+for(const [id,value,pattern] of [
+ ['autoMaxTrades','101',/Max Trades/], ['autoTP','',/Take Profit/], ['autoSL','',/Stop Loss/],
+ ['autoStake','',/base stake/i], ['autoConf','101',/strategy score/i], ['autoMinProfit','-1',/Minimum quoted profit/],
+ ['autoRecovery','kelly',/recovery mode/i], ['autoStrategy','multi_market',/supported demo strategy/i]
+]){
+ const h=harness();h.el(id).value=value;h.run('armDemoAutoStart()');
+ assert.match(h.el('autoStartStatus').textContent,pattern,`${id} explains the error`);
+ assert.equal(h.tab.size,0);assert.equal(h.socket.sent.length,0);
+}
+{
+ const h=harness();h.el('autoQuoteSearch').checked=true;h.el('autoMinProfit').value='0';h.run('armDemoAutoStart()');
+ assert.match(h.el('autoStartStatus').textContent,/greater than zero/);
+ assert.equal(h.tab.size,0);
+}
