@@ -827,7 +827,7 @@ function failManualOrder(message,definitive=false){
       if(saveAccountData('dbx_uncertain_order',null)) S.uncertainOrder=null;
     }
   }
-  if(isBot && S.auto.running && S.auto.mode==='account') stopAutoTrader();
+  if(isBot && S.auto.running && S.auto.mode==='account'){ autoLog(message,'warn'); stopAutoTrader(); }
   renderAccountTracking(); logConn(message); toast(message);
 }
 function safeContractId(id){ return /^\d+$/.test(String(id)) && Number.isSafeInteger(Number(id)) && Number(id)>0; }
