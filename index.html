@@ -165,8 +165,8 @@
 
     <!-- ============ SIGNALS ============ -->
     <section class="view" id="view-signals">
-      <div class="toolbar">
-        <button class="btn btn-red btn-sm" onclick="scanSignals(true)">⚡ Scan All Symbols</button>
+      <p class="muted small market-hint">These describe past ticks, not contract win rates. Rise/fall excludes unchanged prices; payouts are not considered.</p><div class="toolbar">
+        <button class="btn btn-red btn-sm" onclick="scanSignals(true)">⚡ Scan loaded markets</button>
         <label class="check"><input type="checkbox" id="onlyEdge" onchange="renderSignals()"> Only observed frequency above 55%</label>
         <span class="muted" id="scanInfo">Scanning live ticks…</span>
       </div>
@@ -200,11 +200,12 @@
           </div>
           <div class="proposal-box" id="proposalBox">Connect to Deriv and request a quote for actual contract pricing.</div>
           <button class="btn btn-red btn-lg btn-block" id="buyBtn" onclick="buyContract()">CONNECT TO REQUEST QUOTE</button>
-          <p class="muted small">Orders require a Deriv quote and confirmation.</p>
+          <p class="muted small">Orders require a Deriv quote and confirmation. Quotes older than 30 seconds require a new request; local limits are not account-wide.</p>
         </div>
         <div>
-          <div class="card"><div class="card-head"><h4>Open contracts</h4><span class="muted" id="openCount">0 open</span></div><div id="openContracts"></div></div>
+          <div class="card"><div class="card-head"><h4>Open contracts</h4><span class="muted" id="openCount"></span><button class="btn btn-outline btn-sm" onclick="fetchPortfolio()">Refresh</button></div><p class="muted small">Deriv snapshot; refresh to update. It does not resolve uncertain orders.</p><div id="openContracts"></div></div>
           <div class="card" style="margin-top:16px"><div class="card-head"><h4>Portfolio</h4></div><div id="portfolioBox"></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-head"><h4>Recent account transactions</h4><button class="btn btn-outline btn-sm" onclick="fetchStatement()">Load recent</button></div><p class="muted small">Read-only, up to 100 transactions. Verify complete history in Deriv; this will not clear an uncertain order.</p><div id="accountStatement">No statement loaded.</div></div>
           <div class="card" style="margin-top:16px"><div class="card-head"><h4>Account contract tracking</h4></div><p class="muted small">Tracking may be incomplete. Verify in Deriv.</p><p id="accountOrderStatus" role="status"></p><button id="ackOrderBtn" class="btn btn-outline btn-sm" style="display:none" onclick="acknowledgeUncertainOrder()">I checked Deriv — clear warning</button><div id="accountContracts"></div></div>
         </div>
       </div>
@@ -261,10 +262,11 @@
             <div><label class="lbl">Max Trades</label><input class="input full" type="number" id="autoMaxTrades" value="15"></div>
             <div><label class="lbl">Take Profit (currency units)</label><input class="input full" type="number" id="autoTP" value="1.50" step="0.1"></div>
             <div><label class="lbl">Stop Loss (currency units)</label><input class="input full" type="number" id="autoSL" value="1.50" step="0.1"></div>
+            <div><label class="lbl">Minimum quoted profit per win (currency units)</label><input class="input full" type="number" id="autoMinProfit" value="0" min="0" step="0.01"></div>
             <div><label class="lbl">Minimum strategy score %</label><input class="input full" type="number" id="autoConf" value="70"></div>
-            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Smart AI Recovery</option><option value="martingale">Martingale ×2</option><option value="fibonacci">Fibonacci</option><option value="oscar">Oscar-style cycle</option><option value="paroli">Paroli (3-win cap)</option></select></div>
+            <div><label class="lbl">Recovery Mode</label><select class="select full" id="autoRecovery"><option value="none">None (Fixed Stake — Safest)</option><option value="dalembert">D'Alembert +1</option><option value="ai">Fixed 1.5× after loss</option><option value="martingale">Martingale ×2</option><option value="fibonacci">Fibonacci</option><option value="oscar">Oscar-style cycle</option><option value="paroli">Paroli (3-win cap)</option></select></div>
           </div>
-          <p class="muted small">Demo only. Scores are uncalibrated; recovery can increase losses. Stop cannot cancel an open contract.</p>
+          <p class="muted small">Demo only. A quote below the minimum stops the bot; it does not limit losses or ensure profitability. Scores are uncalibrated; recovery can increase losses. Most contracts use five ticks; One-Tick Momentum uses one. Session statistics use locally tracked settlements; past results are not forecasts. Stop cannot cancel an open contract.</p>
           <label class="check"><input type="checkbox" id="autoGuard" checked> Drawdown guard — pause if session P/L &lt; -10%</label>
           <div class="btn-row"><button class="btn btn-green btn-lg" id="autoStartBtn" onclick="toggleAutoTrader()">▶ START AUTO-TRADER</button><button class="btn btn-red2" onclick="stopAutoTrader()">■ Stop</button></div>
           <div class="auto-stats" id="autoStats"></div>
@@ -286,10 +288,10 @@
 
     <!-- ============ AI ============ -->
     <section class="view" id="view-ai">
-      <div class="alert-banner">🧠 <b>AI Prediction Engine</b> — Runs entirely in your browser. Markov chain + frequency weighting over the recent tick sequence. Experimental distribution and next-tick evaluation; model scores are not guaranteed or calibrated probabilities.</div>
+      <div class="alert-banner">🧠 <b>AI Prediction Engine</b> — Runs entirely in your browser. A smoothed transition model based on recent ticks. Scores are uncalibrated estimates, not guaranteed probabilities.</div>
       <div class="grid-3">
         <div class="card"><div class="card-head"><h4>Next-Tick Prediction</h4></div><div id="aiPrediction"></div></div>
-        <div class="card"><div class="card-head"><h4>Probability Distribution</h4></div><canvas id="aiDistChart" height="180"></canvas></div>
+        <div class="card"><div class="card-head"><h4>Probability Distribution</h4></div><canvas id="aiDistChart" height="180"></canvas><div class="digit-legend" id="aiDistLegend"></div></div>
         <div class="card"><div class="card-head"><h4>Model Features</h4></div><div id="aiFeatures"></div></div>
       </div>
       <div class="card"><div class="card-head"><h4>📊 Model Evaluation</h4></div><div id="aiCalibration" class="bt-grid"></div></div>

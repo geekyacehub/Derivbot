@@ -63,3 +63,22 @@ assert.equal(t.run("digitStats('R_50').digits[0]"),2);
 assert.equal(t.run("computeIndicators('R_75').find(x=>x[0]==='Price')[1]"),'—');
 assert.equal(t.run("computeIndicators('R_75').find(x=>x[0]==='Trend')[1]"),'—');
 console.log('Verified precision and missing-data checks passed');
+// Plot geometry must stay finite and labels must be concise on real numeric values.
+t=setup({});
+t.run(`var rectangles=[],texts=[],points=[];
+var chartContext={setTransform(){},clearRect(){},fillRect(...args){rectangles.push(args)},fillText(...args){texts.push(args)},beginPath(){},moveTo(...args){points.push(args)},lineTo(...args){points.push(args)},stroke(){},closePath(){},fill(){}};
+var chart={width:400,height:180,getBoundingClientRect(){return {width:400}},getAttribute(){return '180'},getContext(){return chartContext}};
+drawBars(chart,['0','1'],[33.333333333,66.666666666]); drawLineChart(chart,[100]);`);
+assert.equal(t.run('rectangles.length'),2);
+assert.equal(t.run('rectangles.every(r=>r.every(Number.isFinite))'),true);
+assert.equal(t.run("texts.some(t=>t[0]==='33.3%')"),true);
+assert.equal(t.run('points.every(p=>p.every(Number.isFinite))'),true);
+// Deriv ticks older than the latest recorded exchange timestamp are ignored.
+t=setup({});
+t.run("onTick=()=>{}; var ws={readyState:1,send(){}}; S.ws=ws; activateLiveFeed(ws); handleMarketDiscovery({req_id:S.marketRequest,active_symbols:[{underlying_symbol:'R_75'}]},ws); receiveDerivTick({symbol:'R_75',quote:100.01,pip_size:2,epoch:20},ws); receiveDerivTick({symbol:'R_75',quote:100.09,pip_size:2,epoch:19},ws)");
+assert.equal(t.run('S.tickCounts.R_75'),1);
+assert.equal(t.run('S.ticks.R_75[0]'),100.01);
+assert.equal(t.get('feedStatus').textContent,'DATA: DERIV LIVE');
+t.run("S.tickTimes.R_75=Date.now()-16000; refreshFeedStatus()");
+assert.equal(t.get('feedStatus').textContent,'DATA: NO RECENT SELECTED TICK');
+console.log('Live chart rendering, tick ordering and freshness checks passed');

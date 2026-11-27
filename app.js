@@ -50,7 +50,7 @@ const savedAccountState=readAccountState();
 const S = {
   connected:false, ws:null, token:'', appId:'1089', balance:10000, currency:'USD', isDemo:true, accountName:'Demo',
   selected:'R_75', tf:60, chartType:'candles',
-  ticks:{}, tickCounts:{}, tickTimes:{}, precisionKnown:{}, activeMarkets:null, marketRequest:null, tickRequests:{}, candles:{}, history:{}, feed:'simulation', feedGeneration:0, simulationState:null, // per symbol arrays
+  ticks:{}, tickCounts:{}, tickTimes:{}, tickEpochs:{}, precisionKnown:{}, activeMarkets:null, marketRequest:null, tickRequests:{}, candles:{}, history:{}, feed:'simulation', feedGeneration:0, simulationState:null, // per symbol arrays
   openContracts:[], journal: readJournal(),
   bots: readLocalJSON('dbx_bots',null),
   builderBlocks:[], followers:[],
@@ -61,7 +61,7 @@ const S = {
   simDaily:readLocalJSON('dbx_sim_daily',null),
   alerts:[], tickCount:0, startTime:Date.now(), equity:[10000],
   lastProposal:null, manualOrder:null, orderSeq:10000, accountId:'',
-  uncertainOrder:savedAccountState.order, accountContracts:savedAccountState.contracts, copyResults:{},
+  uncertainOrder:savedAccountState.order, accountContracts:savedAccountState.contracts, portfolioRequest:null, accountPortfolio:null, portfolioStatus:'not requested', statementRequest:null, accountStatement:null, statementStatus:'not requested', copyResults:{},
 };
 const $ = id => document.getElementById(id);
 const fmt = (n,d=2)=> Number(n||0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -117,7 +117,7 @@ function activateLiveFeed(ws){
   if(S.feed!=='deriv'){
     expirePendingPredictions('Feed changed');
     S.simulationState={ticks:S.ticks,candles:S.candles,tickCounts:S.tickCounts,tickCount:S.tickCount,balance:S.balance,currency:S.currency,equity:S.equity,precisions:SYMBOLS.map(s=>s.pip)};
-    S.ticks={}; S.candles={}; S.tickCounts={}; S.tickTimes={}; S.precisionKnown={}; S.tickCount=0;
+    S.ticks={}; S.candles={}; S.tickCounts={}; S.tickTimes={}; S.tickEpochs={}; S.precisionKnown={}; S.tickCount=0;
     SYMBOLS.forEach(s=>{ S.ticks[s.sym]=[]; S.candles[s.sym]=[]; });
     S.feed='deriv'; S.feedGeneration++;
   }
@@ -199,7 +199,7 @@ function handleMarketDiscovery(d,ws){
     delete S.tickRequests[d.req_id]; S.activeMarkets=S.activeMarkets.filter(s=>s!==symbol);
     if(S.manualOrder && S.manualOrder.phase==='proposal' && S.manualOrder.symbol===symbol) failManualOrder('Market subscription failed; no purchase sent.');
     if(S.auto.running && S.auto.mode==='account' && S.auto.symbol===symbol){ autoLog(`Market ${symbol} is unavailable; stopping the bot.`, 'warn'); stopAutoTrader(); }
-    S.ticks[symbol]=[]; S.candles[symbol]=[]; delete S.precisionKnown[symbol]; delete S.tickTimes[symbol];
+    S.ticks[symbol]=[]; S.candles[symbol]=[]; delete S.precisionKnown[symbol]; delete S.tickTimes[symbol]; delete S.tickEpochs[symbol];
     renderMarketSelectors(); updatePriceChip();
     logConn(`Deriv rejected the ${symbol} tick subscription. That market is unavailable in this session.`);
     return true;
@@ -216,10 +216,18 @@ function updateFeedUI(){
   ['snapshotGrid','watchlistGrid','tickerTrack','indicatorStrip','indicatorTable','lastDigits','dashSignals','signalCards','signalTable','btResults'].forEach(id=>{ if($(id)) $(id).innerHTML=''; });
   ['mainChart','heroChart','distChart','aiDistChart','btChart'].forEach(id=>{ const cv=$(id); if(cv && cv.getContext){ const ctx=cv.getContext('2d'); if(ctx) ctx.clearRect(0,0,cv.width,cv.height); } });
 }
+function refreshFeedStatus(){
+  const status=$('feedStatus'); if(!status || S.feed!=='deriv' || !Array.isArray(S.activeMarkets) || !S.activeMarkets.length) return;
+  const last=S.tickTimes[S.selected];
+  status.textContent=!last?'DATA: WAITING FOR SELECTED MARKET':Date.now()-last>15000?'DATA: NO RECENT SELECTED TICK':'DATA: DERIV LIVE';
+}
 function receiveDerivTick(tick,ws){
   if(ws!==S.ws || S.feed!=='deriv' || !tick || !SYMBOLS.some(s=>s.sym===tick.symbol) || (REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(tick.symbol)))) return;
   const quote=Number(tick.quote); if(!Number.isFinite(quote) || quote<=0) return;
   const sym=tick.symbol, meta=SYMBOLS.find(s=>s.sym===sym);
+  const epoch=typeof tick.epoch==='number' && Number.isFinite(tick.epoch)?tick.epoch:null;
+  if(epoch!==null && Number.isFinite(S.tickEpochs[sym]) && epoch<S.tickEpochs[sym]) return;
+  if(epoch!==null) S.tickEpochs[sym]=epoch;
   if(Number.isInteger(tick.pip_size) && tick.pip_size>=0 && tick.pip_size<=10){
     const previous=S.precisionKnown[sym];
     if(previous!==undefined && previous!==tick.pip_size){
@@ -233,6 +241,7 @@ function receiveDerivTick(tick,ws){
   }
   S.ticks[sym].push(quote); if(S.ticks[sym].length>1500) S.ticks[sym].shift();
   S.tickCount++; S.tickCounts[sym]=(S.tickCounts[sym]||0)+1; S.tickTimes[sym]=Date.now();
+  if(sym===S.selected) refreshFeedStatus();
   resolveAI(sym,quote);
   buildCandles(sym,S.tf); onTick(sym);
 }
@@ -359,20 +368,23 @@ function openNewDerivWS(wsUrl, acc){
     updateConnUI(); resumeAccountTracking(ws); saveTabConnection();
     logConn(`✅ Connected & Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'})`);
     toast(`Connected to Deriv — ${S.currency} ${fmt(S.balance)}`);
-    try{ ws.send(JSON.stringify({balance:1, subscribe:1})); ws.send(JSON.stringify({profit_table:1, description:1, limit:25})); }catch(e){}
+    try{ ws.send(JSON.stringify({balance:1, subscribe:1})); }catch(e){}
+    fetchPortfolio(false);
   };
   ws.onmessage=(ev)=>{
     if(S.ws!==ws) return;
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
     const marketHandled=handleMarketDiscovery(d,ws);
+    const portfolioHandled=handlePortfolioMessage(d,ws);
+    const statementHandled=handleStatementMessage(d,ws);
     if(d.tick) receiveDerivTick(d.tick,ws);
     if(d.balance){ const newBal=Number(d.balance.balance); if(Number.isFinite(newBal)){ S.balance=newBal; updateConnUI(); } }
     handleManualOrderMessage(d, ws);
     handleAccountContractMessage(d,ws);
     // Account settlement is not yet reconciled into simulator statistics.
-    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
+    if(d.error && !marketHandled && !portfolioHandled && !statementHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); }
   };
-  ws.onclose=(ev)=>{ if(S.ws!==ws) return; if(S.auto.running && S.auto.mode==='account') stopAutoTrader(); failManualOrder('Connection closed; check your Deriv account before placing another order.'); logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; setConnecting(false); S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); };
+  ws.onclose=(ev)=>{ if(S.ws!==ws) return; if(S.auto.running && S.auto.mode==='account') stopAutoTrader(); failManualOrder('Connection closed; check your Deriv account before placing another order.'); logConn(`WebSocket closed (code ${ev.code}).`); S.connected=false; setConnecting(false); S.accountId=''; S.ws=null; invalidatePortfolio(); restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); };
   ws.onerror=()=>{ logConn('WebSocket error.'); };
 }
 function tryConnect(token){
@@ -396,14 +408,15 @@ function tryConnect(token){
     if(S.ws!==ws) return;
     let d; try{d=JSON.parse(ev.data);}catch(e){return;}
     const marketHandled=handleMarketDiscovery(d,ws);
+    const portfolioHandled=handlePortfolioMessage(d,ws);
+    const statementHandled=handleStatementMessage(d,ws);
     if(d.tick) receiveDerivTick(d.tick,ws);
     if(d.active_symbols){ logConn(`Received ${d.active_symbols.length} active symbols from Deriv.`); }
     if(d.authorize && d.req_id===3 && !authorized){ authorized=true; activateLiveFeed(ws); setConnecting(false); S.connected=true; S.balance=+d.authorize.balance; S.currency=d.authorize.currency; S.isDemo=isVerifiedDemoAccount(d.authorize); S.accountId=String(d.authorize.loginid||''); S.accountName=S.accountId||'Deriv'; updateConnUI(); resumeAccountTracking(ws); saveTabConnection(); try{ws.send(JSON.stringify({balance:1,subscribe:1}));}catch(e){} logConn(`✅ Authorized! Balance: ${S.currency} ${fmt(S.balance)} (${S.isDemo?'Demo':'Real'} account)`); toast('Connected to Deriv — balance '+fmt(S.balance)); fetchPortfolio(); }
-    if(d.error && !marketHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); if(d.req_id===3 && !authorized){ _epIdx=DERIV_ENDPOINTS.length-1; ws.close(); return; } }
+    if(d.error && !marketHandled && !portfolioHandled && !statementHandled){ logConn('⚠️ Deriv error: '+d.error.message); toast('Deriv: '+d.error.message); if(d.req_id===3 && !authorized){ _epIdx=DERIV_ENDPOINTS.length-1; ws.close(); return; } }
     if(d.balance){ const newBal=Number(d.balance.balance); if(Number.isFinite(newBal)){ S.balance=newBal; updateConnUI(); } }
     handleManualOrderMessage(d, ws);
     handleAccountContractMessage(d,ws);
-    if(d.portfolio){ renderPortfolio(d.portfolio); }
     if(d.history){ /* journal sync */ }
     if(d.contract){ /* open contract update */ }
   };
@@ -415,11 +428,11 @@ function tryConnect(token){
     logConn(`WebSocket closed (code ${ev.code}${ev.reason?': '+ev.reason:''}).`);
     if(!S.connected && _epIdx < DERIV_ENDPOINTS.length-1){ _epIdx++; logConn('🔄 Trying fallback endpoint…'); const generation=_connectionGeneration; setTimeout(()=>{ if(generation===_connectionGeneration) tryConnect(token); },800); }
     else if(!S.connected){ setConnecting(false); logConn('Could not connect to Deriv. Check network access, browser restrictions and App ID, then retry.'); }
-    S.connected=false; S.accountId=''; S.ws=null; restoreSimulationFeed(); updateConnUI(); renderAccountTracking();
+    S.connected=false; S.accountId=''; S.ws=null; invalidatePortfolio(); restoreSimulationFeed(); updateConnUI(); renderAccountTracking();
   };
   ws.onerror=()=>{ logConn('WebSocket error — check app_id / network.'); };
 }
-function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; setConnecting(false); if(_restAbort){_restAbort.abort(); _restAbort=null;} clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
+function disconnectDeriv(options={}){ let storageCleared=true; ++_connectionGeneration; setConnecting(false); if(_restAbort){_restAbort.abort(); _restAbort=null;} clearTimeout(_connTimer); if(S.auto.running) stopAutoTrader(); const ws=S.ws; S.ws=null; try{ws&&ws.close();}catch(e){} failManualOrder('Disconnected; verify any pending order in Deriv.'); S.connected=false; S.accountId=''; invalidatePortfolio(); if(!options.preserveToken){ storageCleared=clearTabConnection(); if($('rememberTab')) $('rememberTab').checked=false; S.token=''; if($('tokenInput')) $('tokenInput').value=''; if($('gateTokenInput')) $('gateTokenInput').value=''; try{localStorage.removeItem('dbx_token');}catch(e){} } restoreSimulationFeed(); updateConnUI(); renderAccountTracking(); logConn('Disconnected.'); toast(storageCleared?'Disconnected from Deriv':'Disconnected; could not clear tab storage. Close the tab or clear site data.'); }
 function switchAccountMode(mode){
   if(S.connected || S.ws || _connecting) disconnectDeriv({preserveToken:true});
   if(S.isDemo!==(mode==='demo')) clearTabConnection();
@@ -436,7 +449,81 @@ function switchAccountMode(mode){
     updateConnUI();
   }
 }
-function fetchPortfolio(){ if(S.ws&&S.connected) S.ws.send(JSON.stringify({portfolio:1, subscribe:1})); }
+// Snapshot is read-only and is never used to clear uncertain orders or infer settlement.
+function invalidatePortfolio(){ S.portfolioRequest=null; S.accountPortfolio=null; S.portfolioStatus='not requested'; S.statementRequest=null; S.accountStatement=null; S.statementStatus='not requested'; if($('openContracts')) renderOpenContracts(); renderStatement(); }
+function fetchPortfolio(manual=true){
+  const ws=S.ws;
+  if(!S.connected || !S.accountId || !ws || ws.readyState!==1){ if(manual) toast('Connect to Deriv before refreshing open positions.'); return; }
+  if(S.portfolioRequest){ if(manual) toast('Portfolio request already in progress.'); return; }
+  const req=++S.orderSeq, accountId=S.accountId;
+  S.portfolioRequest={req,accountId,ws}; S.accountPortfolio=null; S.portfolioStatus='loading'; renderOpenContracts();
+  try{ws.send(JSON.stringify({portfolio:1,req_id:req}));}
+  catch(e){ S.portfolioRequest=null; S.accountPortfolio=null; S.portfolioStatus='unavailable'; renderOpenContracts(); logConn('Could not request open positions.'); return; }
+  setTimeout(()=>{
+    if(S.portfolioRequest && S.portfolioRequest.req===req && S.portfolioRequest.ws===ws){
+      S.portfolioRequest=null; S.accountPortfolio=null; S.portfolioStatus='unavailable'; renderOpenContracts(); logConn('Open positions request timed out; check Deriv.');
+    }
+  },15000);
+}
+function handlePortfolioMessage(d,ws){
+  const pending=S.portfolioRequest;
+  if(!pending || pending.ws!==ws || ws!==S.ws || d.req_id!==pending.req || !S.connected || S.accountId!==pending.accountId) return false;
+  if(!d.error && !d.portfolio) return false;
+  S.portfolioRequest=null;
+  if(d.error || !d.portfolio || !Array.isArray(d.portfolio.contracts) || d.portfolio.contracts.length>1000 || d.portfolio.contracts.some(c=>!c || typeof c!=='object' || Array.isArray(c))){
+    S.accountPortfolio=null; S.portfolioStatus='unavailable'; renderOpenContracts(); logConn('Could not read open positions from Deriv; check Deriv.'); return true;
+  }
+  // Copy only display fields; external text is always rendered as textContent.
+  const contracts=d.portfolio.contracts.map(c=>({
+    id:safeContractId(c.contract_id)?String(c.contract_id):'',
+    type:typeof c.contract_type==='string'?c.contract_type.slice(0,80):'',
+    symbol:typeof c.underlying_symbol==='string'?c.underlying_symbol.slice(0,80):'',
+    description:typeof c.longcode==='string'?c.longcode.slice(0,300):'',
+    currency:typeof c.currency==='string'?c.currency.slice(0,20):'',
+    buyPrice:typeof c.buy_price==='number' && Number.isFinite(c.buy_price) && c.buy_price>=0?c.buy_price:null
+  }));
+  S.accountPortfolio={accountId:pending.accountId,contracts,receivedAt:Date.now()}; S.portfolioStatus='loaded'; renderOpenContracts();
+  return true;
+}
+// Statement snapshots are read-only evidence, never automatic settlement or order acknowledgement.
+function renderStatement(){
+  const target=$('accountStatement'); if(!target) return;
+  const snapshot=S.accountStatement;
+  if(S.statementStatus==='loading'){target.textContent='Loading recent transactions…'; return;}
+  if(!snapshot || !S.connected || snapshot.accountId!==S.accountId){target.textContent='No recent statement loaded. Check Deriv for complete account history.'; return;}
+  target.textContent='';
+  const summary=document.createElement('div');
+  summary.textContent=`Latest ${snapshot.transactions.length} transactions received at ${new Date(snapshot.receivedAt).toLocaleTimeString()}. This is a limited snapshot, not complete history.`;
+  target.appendChild(summary);
+  for(const t of snapshot.transactions){
+    const local=t.contractId && (S.accountContracts||[]).find(c=>c.accountId===snapshot.accountId && String(c.id)===t.contractId);
+    const row=document.createElement('div'); row.className='contract';
+    const when=t.time===null?'Time unavailable':new Date(t.time*1000).toLocaleString();
+    const amount=t.amount===null?'amount unavailable':`${S.currency} ${fmt(t.amount)}`;
+    row.textContent=`${when} · ${t.action} · ${amount}${t.contractId?' · contract '+t.contractId:''}${local?' · locally tracked '+local.status:''}`;
+    target.appendChild(row);
+  }
+}
+function fetchStatement(){
+  const ws=S.ws;
+  if(!S.connected || !S.accountId || !ws || ws.readyState!==1) return toast('Connect to Deriv before requesting account history.');
+  if(S.statementRequest) return toast('Statement request already in progress.');
+  const req=++S.orderSeq, accountId=S.accountId;
+  S.statementRequest={req,accountId,ws}; S.accountStatement=null; S.statementStatus='loading'; renderStatement();
+  try{ ws.send(JSON.stringify({statement:1,limit:100,offset:0,req_id:req})); }
+  catch(e){S.statementRequest=null; S.statementStatus='unavailable'; renderStatement(); return toast('Could not request account statement.');}
+  setTimeout(()=>{if(S.statementRequest && S.statementRequest.req===req && S.statementRequest.ws===ws){S.statementRequest=null; S.statementStatus='unavailable'; renderStatement(); logConn('Statement request timed out; check Deriv.');}},15000);
+}
+function handleStatementMessage(d,ws){
+  const pending=S.statementRequest;
+  if(!pending || pending.ws!==ws || ws!==S.ws || d.req_id!==pending.req || !S.connected || S.accountId!==pending.accountId) return false;
+  if(!d.error && !d.statement) return false;
+  S.statementRequest=null;
+  const rows=d.statement && d.statement.transactions;
+  if(d.error || !Array.isArray(rows) || rows.length>100 || rows.some(t=>!t || typeof t!=='object' || Array.isArray(t))){S.accountStatement=null; S.statementStatus='unavailable'; renderStatement(); logConn('Could not read account statement; check Deriv.'); return true;}
+  const transactions=rows.map(t=>({action:typeof t.action_type==='string'?t.action_type.slice(0,40):'unknown',amount:typeof t.amount==='number' && Number.isFinite(t.amount)?t.amount:null,time:Number.isSafeInteger(t.transaction_time) && t.transaction_time>=0 && t.transaction_time<=9999999999?t.transaction_time:null,contractId:safeContractId(t.contract_id)?String(t.contract_id):''}));
+  S.accountStatement={accountId:pending.accountId,receivedAt:Date.now(),transactions}; S.statementStatus='loaded'; renderStatement(); return true;
+}
 function updateConnUI(){
   $('connDot').className='dot'+(S.connected?' live':'');
   $('connLabel').textContent = S.connected ? `Connected · ${S.accountName}` : (REAL_DATA_ONLY?'Disconnected':'Demo Mode');
@@ -454,23 +541,23 @@ function settleRealContract(id){ /* Deriv will send contract updates; journal vi
 /* ================= CHART HELPERS ================= */
 function setupCanvas(cv){ const r=cv.getBoundingClientRect(); const dpr=window.devicePixelRatio||1; cv.width=(r.width||600)*dpr; cv.height=(+cv.getAttribute('height')||200)*dpr; const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,w:r.width||600,h:+cv.getAttribute('height')||200}; }
 function drawLineChart(cv, data, color='#00d09c'){
-  if(!cv||!data.length) return; const {ctx,w,h}=setupCanvas(cv);
+  if(!cv) return; if(!data.length){ const ctx=cv.getContext?.('2d'); if(ctx) ctx.clearRect(0,0,cv.width,cv.height); return; } const {ctx,w,h}=setupCanvas(cv);
   const min=Math.min(...data), max=Math.max(...data), pad=(max-min)*0.1||1;
   ctx.clearRect(0,0,w,h); ctx.strokeStyle='#16233a'; ctx.lineWidth=1;
   for(let i=1;i<4;i++){ ctx.beginPath(); ctx.moveTo(0,h*i/4); ctx.lineTo(w,h*i/4); ctx.stroke(); }
-  ctx.beginPath(); data.forEach((v,i)=>{ const x=i/(data.length-1)*w, y=h-((v-min+pad)/(max-min+2*pad))*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.beginPath(); data.forEach((v,i)=>{ const x=data.length===1?w/2:i/(data.length-1)*w, y=h-((v-min+pad)/(max-min+2*pad))*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
   ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
   ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fillStyle=color+'22'; ctx.fill();
 }
 function drawCandles(cv, candles, type='candles'){
-  if(!cv||!candles.length) return; const {ctx,w,h}=setupCanvas(cv);
+  if(!cv) return; if(!candles.length){ const ctx=cv.getContext?.('2d'); if(ctx) ctx.clearRect(0,0,cv.width,cv.height); return; } const {ctx,w,h}=setupCanvas(cv);
   const slice=candles.slice(-80);
   const min=Math.min(...slice.map(c=>c.l)), max=Math.max(...slice.map(c=>c.h)), pad=(max-min)*0.08||1;
   const Y=v=> h-((v-min+pad)/(max-min+2*pad))*h;
   ctx.clearRect(0,0,w,h); ctx.strokeStyle='#16233a';
   for(let i=1;i<5;i++){ ctx.beginPath(); ctx.moveTo(0,h*i/5); ctx.lineTo(w,h*i/5); ctx.stroke(); }
   if(type==='line'||type==='area'){
-    ctx.beginPath(); slice.forEach((c,i)=>{ const x=i/(slice.length-1)*w; i?ctx.lineTo(x,Y(c.c)):ctx.moveTo(x,Y(c.c)); });
+    ctx.beginPath(); slice.forEach((c,i)=>{ const x=slice.length===1?w/2:i/(slice.length-1)*w; i?ctx.lineTo(x,Y(c.c)):ctx.moveTo(x,Y(c.c)); });
     ctx.strokeStyle='#2e9bff'; ctx.lineWidth=2; ctx.stroke();
     if(type==='area'){ ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fillStyle='rgba(46,155,255,.15)'; ctx.fill(); }
     return;
@@ -484,13 +571,20 @@ function drawCandles(cv, candles, type='candles'){
 }
 function drawBars(cv, labels, values, colors){
   if(!cv) return; const {ctx,w,h}=setupCanvas(cv); ctx.clearRect(0,0,w,h);
-  const max=Math.max(...values,1), bw=w/values.length;
-  values.forEach((v,i)=>{ const bh=(v/max)*(h-24); ctx.fillStyle=colors?colors[i]:'#2e9bff'; ctx.fillRect(i*bw+4,h-18-bh,bw-8,bh); ctx.fillStyle='#8aa0b8'; ctx.font='11px JetBrains Mono'; ctx.textAlign='center'; ctx.fillText(labels[i],i*bw+bw/2,h-4); ctx.fillStyle='#e8eef7'; ctx.fillText(v,i*bw+bw/2,h-22-bh); });
+  if(!Array.isArray(values) || !values.length || !values.every(v=>typeof v==='number' && Number.isFinite(v) && v>=0)) return;
+  const max=Math.max(...values,1), bw=w/values.length, base=h-22, plotHeight=Math.max(0,h-46);
+  values.forEach((v,i)=>{
+    const bh=(v/max)*plotHeight, x=i*bw+bw/2;
+    ctx.fillStyle=colors?colors[i]:'#2e9bff'; ctx.fillRect(i*bw+2,base-bh,Math.max(1,bw-4),bh);
+    ctx.fillStyle='#8aa0b8'; ctx.font='10px JetBrains Mono'; ctx.textAlign='center'; ctx.fillText(String(labels[i]),x,h-5);
+    // Values remain visible in the adjacent legend on narrow charts.
+    if(bw>=34){ ctx.fillStyle='#e8eef7'; ctx.font='10px JetBrains Mono'; ctx.fillText(`${v.toFixed(1)}%`,x,Math.max(11,base-bh-5)); }
+  });
 }
 function drawSpark(cv, data){
   if(!cv||data.length<2) return; const {ctx,w,h}=setupCanvas(cv); ctx.clearRect(0,0,w,h);
   const min=Math.min(...data),max=Math.max(...data); ctx.beginPath();
-  data.forEach((v,i)=>{ const x=i/(data.length-1)*w, y=h-((v-min)/((max-min)||1))*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  data.forEach((v,i)=>{ const x=data.length===1?w/2:i/(data.length-1)*w, y=h-((v-min)/((max-min)||1))*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
   ctx.strokeStyle=data[data.length-1]>=data[0]?'#00d09c':'#ff444f'; ctx.lineWidth=1.5; ctx.stroke();
 }
 
@@ -556,7 +650,7 @@ function digitStats(sym, ticks=S.ticks[sym]||[]){
   const gaps=Array(10).fill(0); const lastSeen=Array(10).fill(-1);
   digits.forEach((d,i)=>{ lastSeen[d]=i; });
   for(let d=0;d<10;d++) gaps[d]= lastSeen[d]===-1? n : n-1-lastSeen[d];
-  return {digits,freq,evenPct:even/divisor*100,oddPct:odd/divisor*100,over,under,match,risePct:rise/((rise+fall)||1)*100,fallPct:fall/((rise+fall)||1)*100,transPct,gaps,streaks,n};
+  return {digits,freq,movements:rise+fall,flat:Math.max(0,ticks.length-1-rise-fall),evenPct:even/divisor*100,oddPct:odd/divisor*100,over,under,match,risePct:rise/((rise+fall)||1)*100,fallPct:fall/((rise+fall)||1)*100,riseAllPct:rise/(Math.max(1,ticks.length-1))*100,fallAllPct:fall/(Math.max(1,ticks.length-1))*100,transPct,gaps,streaks,n};
 }
 function renderDigits(){
   const sym=S.selected, st=digitStats(sym);
@@ -564,14 +658,14 @@ function renderDigits(){
   if(!st.n){ ['lastDigits','digitLegend','overUnderTable','parityPanel','transitionMatrix','streakPanel'].forEach(id=>{ $(id).textContent='Waiting for ticks and verified Deriv precision.'; }); ['digitFreqChart','distChart','dcircles'].forEach(id=>{ const cv=$(id); if(cv && cv.getContext){const c=cv.getContext('2d'); if(c) c.clearRect(0,0,cv.width,cv.height);} }); return; }
   const last20=st.digits.slice(-20).reverse();
   $('lastDigits').innerHTML=last20.map(d=>`<div class="digit-ball ${d%2===0?'even':'odd'}" title="${d%2===0?'Even':'Odd'}">${d}</div>`).join('');
-  drawBars($('digitFreqChart'), ['0','1','2','3','4','5','6','7','8','9'], st.freq.map(v=>Math.round(v/(st.n||1)*100)+'%'), ['#ff444f','#ffb020','#00d09c','#2e9bff','#b388ff','#ff7a45','#00d09c','#ffb020','#2e9bff','#ff444f']);
+  drawBars($('digitFreqChart'), ['0','1','2','3','4','5','6','7','8','9'], st.freq.map(v=>v/st.n*100), ['#ff444f','#ffb020','#00d09c','#2e9bff','#b388ff','#ff7a45','#00d09c','#ffb020','#2e9bff','#ff444f']);
   $('digitLegend').innerHTML = st.freq.map((f,i)=>`<span>${i}: ${Math.round(f/(st.n||1)*100)}%</span>`).join('');
-  $('overUnderTable').innerHTML = [0,1,2,3,4,5,6,7,8,9].map(b=>`<div class="ou-row"><span>Barrier <b>${b}</b></span><span>OVER <b class="up">${st.over[b].toFixed(1)}%</b></span><div class="bar"><i style="width:${st.over[b]}%"></i></div><span>UNDER <b>${st.under[b].toFixed(1)}%</b></span></div>`).join('');
+  $('overUnderTable').innerHTML = [0,1,2,3,4,5,6,7,8,9].map(b=>`<div class="ou-row"><span>Barrier <b>${b}</b></span><span> OVER <b class="up">${st.over[b].toFixed(1)}%</b></span><div class="bar"><i style="width:${st.over[b]}%"></i></div><span>UNDER <b>${st.under[b].toFixed(1)}%</b></span></div>`).join('');
   $('parityPanel').innerHTML = `
     <div class="big-stat"><span>Even</span><b class="up">${st.evenPct.toFixed(1)}%</b></div>
     <div class="big-stat"><span>Odd</span><b style="color:var(--amber)">${st.oddPct.toFixed(1)}%</b></div>
-    <div class="big-stat"><span>Rise (price ↑)</span><b class="up">${st.risePct.toFixed(1)}%</b></div>
-    <div class="big-stat"><span>Fall (price ↓)</span><b class="down">${st.fallPct.toFixed(1)}%</b></div>
+    <div class="big-stat"><span>Rise (non-flat moves)</span><b class="up">${st.risePct.toFixed(1)}%</b></div>
+    <div class="big-stat"><span>Fall (non-flat moves)</span><b class="down">${st.fallPct.toFixed(1)}%</b></div>
     <div class="big-stat"><span>Best Matches digit</span><b>${st.match? Object.entries(st.match).sort((a,b)=>b[1]-a[1])[0][0] : '—'} (${Math.max(...Object.values(st.match||{0:0})).toFixed(1)}%)</b></div>
     <div class="big-stat"><span>Best Differs digit</span><b>${Object.entries(st.match).sort((a,b)=>a[1]-b[1])[0][0]} (${(100-Object.entries(st.match).sort((a,b)=>a[1]-b[1])[0][1]).toFixed(1)}%)</b></div>`;
   // transition matrix
@@ -598,17 +692,17 @@ function computeSignals(){
   SYMBOLS.forEach(s=>{
     const st=digitStats(s.sym); if(st.n<50) return;
     // best over/under
-    let bestOU={type:'OVER',barrier:5,win:50};
+    let bestOU={type:'OVER',barrier:0,win:-1};
     for(let b=0;b<10;b++){ if(st.over[b]>bestOU.win) bestOU={type:'OVER',barrier:b,win:st.over[b]}; if(st.under[b]>bestOU.win) bestOU={type:'UNDER',barrier:b,win:st.under[b]}; }
     const parity = st.evenPct>st.oddPct? {type:'EVEN',win:st.evenPct}:{type:'ODD',win:st.oddPct};
-    const bestMatch = Object.entries(st.match).sort((a,b)=>b[1]-a[1])[0];
-    const differsWin = 100 - (+bestMatch[1]);
+    const coldest = Object.entries(st.match).sort((a,b)=>a[1]-b[1])[0];
+    const differsWin = 100 - (+coldest[1]);
     const riseFall = st.risePct>st.fallPct? {type:'RISE',win:st.risePct}:{type:'FALL',win:st.fallPct};
     const candidates=[
       {sym:s.sym,name:s.name,signal:`${bestOU.type} ${bestOU.barrier}`,win:bestOU.win,conf:bestOU.win,sample:st.n},
       {sym:s.sym,name:s.name,signal:parity.type,win:parity.win,conf:parity.win,sample:st.n},
-      {sym:s.sym,name:s.name,signal:`DIFFERS ${bestMatch[0]}`,win:differsWin,conf:Math.min(98,differsWin),sample:st.n},
-      {sym:s.sym,name:s.name,signal:riseFall.type,win:riseFall.win,conf:riseFall.win,sample:st.n},
+      {sym:s.sym,name:s.name,signal:`DIFFERS ${coldest[0]}`,win:differsWin,conf:Math.min(98,differsWin),sample:st.n},
+      ...(st.movements?[{sym:s.sym,name:s.name,signal:riseFall.type,win:riseFall.win,conf:riseFall.win,sample:st.movements,unit:'non-flat moves'}]:[]),
     ];
     candidates.sort((a,b)=>b.win-a.win); out.push(candidates[0]);
   });
@@ -621,14 +715,14 @@ function renderSignals(){
   $('signalCards').innerHTML=shown.slice(0,8).map(s=>`
     <div class="signal-card"><div class="head"><div><b>${s.name}</b><div class="muted small mono">${s.sym}</div></div><div class="conf" style="color:${s.win>55?'var(--green)':'var(--amber)'}">${s.win.toFixed(1)}%</div></div>
     <div style="font-size:20px;font-weight:800">⚡ ${s.signal}</div><div class="edge-bar"><i style="width:${s.win}%"></i></div>
-    <div class="muted small">Observed frequency · Sample ${s.sample} ticks</div>
-    <button class="btn btn-red btn-sm btn-block" style="margin-top:10px" onclick="selectSymbol('${s.sym}');showView('trade')">Trade this →</button></div>`).join('')||'<p class="muted">Not enough observed ticks for these calculations.</p>';
-  $('signalTable').innerHTML=`<tr><th>Symbol</th><th>Signal</th><th>Observed frequency</th><th>Score</th><th>Sample</th><th></th></tr>`+
-    shown.map(s=>`<tr><td>${s.name}</td><td><b>${s.signal}</b></td><td><span class="pill-win">${s.win.toFixed(1)}%</span></td><td>${s.conf.toFixed(0)}%</td><td>${s.sample}</td><td><button class="btn btn-ghost btn-sm" onclick="selectSymbol('${s.sym}');showView('digits')">Analyse</button></td></tr>`).join('');
+    <div class="muted small">Observed frequency · ${s.sample} ${s.unit||'ticks'}</div>
+    <button class="btn btn-red btn-sm btn-block" style="margin-top:10px" onclick="selectSymbol('${s.sym}');showView('digits')">View analysis →</button></div>`).join('')||'<p class="muted">Not enough observed ticks for these calculations.</p>';
+  $('signalTable').innerHTML=`<tr><th>Symbol</th><th>Signal</th><th>Observed frequency</th><th>Sample</th><th></th></tr>`+
+    shown.map(s=>`<tr><td>${s.name}</td><td><b>${s.signal}</b></td><td><span class="pill-win">${s.win.toFixed(1)}%</span></td><td>${s.sample} ${s.unit||'ticks'}</td><td><button class="btn btn-ghost btn-sm" onclick="selectSymbol('${s.sym}');showView('digits')">Analyse</button></td></tr>`).join('');
   $('dashSignals').innerHTML=sigs.slice(0,5).map(s=>`<div class="ou-row"><span>${s.name} — <b>${s.signal}</b></span><span class="pill-win">${s.win.toFixed(1)}%</span></div>`).join('')||'<p class="muted small">Waiting for enough live ticks.</p>';
-  $('scanInfo').textContent=`Scanned ${sigs.length} symbols · ${new Date().toLocaleTimeString()}`;
+  $('scanInfo').textContent=`${sigs.length} markets with enough ticks · ${new Date().toLocaleTimeString()}`;
 }
-function scanSignals(manual){ renderSignals(); if(manual) toast('⚡ Signals scanned across all symbols'); }
+function scanSignals(manual){ renderSignals(); if(manual) toast('Updated observed frequencies for markets with enough ticks.'); }
 
 /* ================= TRADING ================= */
 function updateProposal(){
@@ -747,9 +841,9 @@ function handleAccountContractMessage(d,ws){
   const updated={...record,status:'SETTLED',profit};
   const records=S.accountContracts.map(c=>c===record?updated:c);
   if(!saveAccountData('dbx_account_contracts',records)){ logConn('Could not save settlement; check Deriv for contract '+id+'.'); return; }
-  S.accountContracts=records; renderAccountTracking();
+  S.accountContracts=records; invalidatePortfolio(); renderAccountTracking();
   if(record.botSessionId && record.botSessionId===S.auto.sessionId && record.accountId===S.auto.accountId){
-    if(profit===0){ S.auto.totalPayout=(S.auto.totalPayout||0)+record.stake; S.auto.curStake=S.auto.stake; autoLog('Account contract settled at break-even; verify in Deriv.'); renderAutoStats(); }
+    if(profit===0){ S.auto.totalPayout=(S.auto.totalPayout||0)+record.stake; S.auto.breakEven=(S.auto.breakEven||0)+1; S.auto.lossStreak=0; S.auto.curStake=S.auto.stake; autoLog('Account contract settled at break-even; verify in Deriv.'); renderAutoStats(); }
     else onAutoSettle({type:record.type,stake:record.stake,profit,win:profit>0});
   }
   toast('Account contract '+id+' settled; check Deriv for details.');
@@ -761,21 +855,33 @@ function handleManualOrderMessage(d, ws){
   if(!order || ws!==S.ws) return;
   if(d.error && d.req_id===order.req){ failManualOrder('Deriv order error: '+d.error.message,true); return; }
   if(order.phase==='proposal' && d.req_id===order.req && d.proposal){
-    const quote=d.proposal, ask=Number(quote.ask_price), payout=Number(quote.payout);
+    const quote=d.proposal, ask=Number(quote.ask_price), payout=Number(quote.payout), quoteReceivedAt=Date.now();
     if(!quote.id || !Number.isFinite(ask) || ask<=0 || ask>order.stake || !Number.isFinite(payout) || payout<=0) return failManualOrder('Invalid or higher-than-requested quote; no purchase sent.');
     if(order.kind!=='auto') renderProposal(quote,order);
     if(order.kind==='auto'){
       checkAutoTimer();
       if(!S.auto.running || S.auto.mode!=='account' || S.auto.sessionId!==order.botSessionId || !S.isDemo || Date.now()-order.createdAt>10000) return failManualOrder('Bot stopped, quote expired, or account changed; no purchase sent.');
+      if(REAL_DATA_ONLY && (!S.tickTimes[order.symbol] || Date.now()-S.tickTimes[order.symbol]>10000 || S.precisionKnown[order.symbol]===undefined)) return failManualOrder('Market data became stale or precision is unavailable; no purchase sent.');
+      const minimum=S.auto.minProfit ?? 0;
+      if(!Number.isFinite(minimum) || minimum<0 || payout-ask+1e-9<minimum) return failManualOrder(`Quote skipped: potential profit ${order.currency} ${fmt(payout-ask)} is below your minimum ${order.currency} ${fmt(minimum)}; no purchase sent.`);
+      autoLog(`Quote: cost ${order.currency} ${fmt(ask)}, potential profit ${order.currency} ${fmt(payout-ask)}, break-even win rate ${(ask/payout*100).toFixed(1)}%. Not a profit forecast.`, 'info');
       const guard=checkAccountBotRisk(ask);
       if(guard) return failManualOrder(guard);
     }else{
       const confirmed=window.confirm(`ACCOUNT TRADE (${S.isDemo?'DEMO':'REAL'})\n${order.type} on ${order.symbol}\nBarrier: ${order.barrier}; duration: ${order.dur} ticks\nCost: ${S.currency} ${ask.toFixed(2)}; payout: ${S.currency} ${payout.toFixed(2)}\nYou may lose the full stake. Buy this contract?`);
-      if(!confirmed){ S.manualOrder=null; renderAccountTracking(); toast('Account order cancelled.'); return; }
+      if(!confirmed){ if(S.manualOrder===order) S.manualOrder=null; renderAccountTracking(); toast('Account order cancelled.'); return; }
     }
-    if(!S.connected || S.ws!==ws || ws.readyState!==1 || order.accountId!==S.accountId) return failManualOrder('Connection or account changed; no purchase sent.');
+    if(S.manualOrder!==order) return toast('Order changed; no purchase sent.');
+    if(!S.connected || S.ws!==ws || ws.readyState!==1 || order.accountId!==S.accountId || order.currency!==S.currency || S.uncertainOrder) return failManualOrder('Connection or account changed; no purchase sent.');
+    if(REAL_DATA_ONLY && (!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(order.symbol))) return failManualOrder('Market is no longer available; no purchase sent.');
+    if(order.kind!=='auto'){
+      const cap=Number(S.risk && S.risk.maxStakePct);
+      if(Date.now()-quoteReceivedAt>30000) return failManualOrder('Quote is too old; request a new quote.');
+      if(!Number.isFinite(S.balance) || ask>S.balance || !Number.isFinite(cap) || cap<=0 || cap>100 || ask>S.balance*cap/100+1e-9) return failManualOrder('Balance or stake limit changed; no purchase sent.');
+    }
     const marker={accountId:order.accountId,symbol:order.symbol,type:order.type,stake:ask,currency:order.currency,createdAt:Date.now(),kind:order.kind||'manual',botSessionId:order.botSessionId||null};
     if(!saveAccountData('dbx_uncertain_order',marker)) return failManualOrder('Unable to save order safety marker; no purchase sent.');
+    invalidatePortfolio();
     S.uncertainOrder=marker; order.ask=ask; order.phase='buy'; order.req=++S.orderSeq; renderAccountTracking();
     try { ws.send(JSON.stringify({buy:quote.id, price:ask, req_id:order.req})); }
     catch(e){ return failManualOrder('Buy could not be confirmed.'); }
@@ -862,14 +968,31 @@ function settleMock(){
   });
 }
 function renderOpenContracts(){
-  if(REAL_DATA_ONLY){ $('openCount').textContent=''; $('openContracts').textContent='Local account contracts appear in Account contract tracking below. Check Deriv for the complete list.'; renderPortfolio(); return; }
+  if(REAL_DATA_ONLY){
+    const list=$('openContracts'), snapshot=S.accountPortfolio;
+    $('openCount').textContent=snapshot && snapshot.accountId===S.accountId?`${snapshot.contracts.length} open`:'';
+    if(!S.connected) list.textContent='Connect to Deriv to view open positions.';
+    else if(S.portfolioStatus==='loading') list.textContent='Loading open positions from Deriv…';
+    else if(!snapshot || snapshot.accountId!==S.accountId) list.textContent='Open positions unavailable or out of date. Refresh or check Deriv.';
+    else if(!snapshot.contracts.length) list.textContent='No open positions in the last Deriv snapshot.';
+    else{
+      list.textContent='';
+      snapshot.contracts.forEach(c=>{
+        const row=document.createElement('div'); row.className='contract';
+        const price=c.buyPrice===null?'':` · Paid ${c.currency||S.currency} ${fmt(c.buyPrice)}`;
+        row.textContent=`${c.type||'Contract'}${c.symbol?' · '+c.symbol:''}${c.id?' · ID '+c.id:''}${price}${c.description?' · '+c.description:''}`;
+        list.appendChild(row);
+      });
+    }
+    renderPortfolio(); return;
+  }
   $('openCount').textContent=S.openContracts.length+' open';
   $('openContracts').innerHTML=S.openContracts.length? S.openContracts.map(c=>`<div class="contract"><div class="row"><b>${c.type}</b><span>${c.symbol}</span><span class="pill-win">OPEN</span></div><div class="row"><span>Stake</span><b>$${fmt(c.stake)}</b></div><div class="row"><span>Barrier</span><b>${c.barrier}</b></div><div class="row"><span>Entry</span><b>${fmtPrice(c.entryPrice)}</b></div></div>`).join('') : '<p class="muted">No open contracts. Place a trade to see it here.</p>';
   renderPortfolio();
 }
 function renderPortfolio(){
   if(REAL_DATA_ONLY && !S.connected){ $('portfolioBox').textContent='Connect to Deriv to view account balance. Check Deriv for your portfolio.'; return; }
-  if(S.connected){ $('portfolioBox').textContent=`Account balance: ${S.currency} ${Number.isFinite(S.balance)?fmt(S.balance):'unavailable'}. Check Deriv for open contracts and account P/L.`; return; }
+  if(S.connected){ const snapshot=S.accountPortfolio; const detail=snapshot && snapshot.accountId===S.accountId?` Open positions snapshot: ${new Date(snapshot.receivedAt).toLocaleTimeString()}.`:' Open positions snapshot unavailable.'; $('portfolioBox').textContent=`Account balance: ${S.currency} ${Number.isFinite(S.balance)?fmt(S.balance):'unavailable'}.${detail} Check Deriv for account history and P/L.`; return; }
   const openStake=S.openContracts.reduce((a,c)=>a+c.stake,0);
   $('portfolioBox').innerHTML=`<div class="big-stat"><span>Balance</span><b>$${fmt(S.balance)}</b></div><div class="big-stat"><span>Open stake</span><b>$${fmt(openStake)}</b></div><div class="big-stat"><span>Session P/L</span><b style="color:${S.balance-10000>=0?'var(--green)':'var(--red)'}">${S.balance-10000>=0?'+':''}$${fmt(S.balance-10000)}</b></div>`;
 }
@@ -904,26 +1027,28 @@ const BOT_TEMPLATES=[
 // Existing saved built-ins are refreshed from these definitions; custom bots remain local.
 const BOT_OVERRIDES={
   apex:{desc:'Uses the over/under frequency scan; recovery is selected separately.',tags:['Frequency','Recovery optional']},
-  speed:{desc:'Uses the same over/under frequency scan as the simulator, not high-frequency execution.',tags:['Frequency','Simulator']},
+  speed:{desc:'Uses the over/under frequency scan; not high-frequency execution.',tags:['Frequency','Shared logic']},
   over:{desc:'Selects the largest observed over/under frequency from the local tick buffer.',tags:['Digits','Observed frequency']},
   evenodd:{desc:'Selects the more frequent parity in the local tick buffer.',tags:['Digits','Parity']},
   match:{desc:'Selects a Differs contract on the least frequent digit in the local tick buffer.',tags:['Digits','Differs']},
   mart:{desc:'Uses the over/under frequency scan with Martingale ×2 selected as the recovery mode.',recovery:'martingale',tags:['Frequency','Martingale']},
   dal:{desc:'Uses the over/under frequency scan with D’Alembert selected as the recovery mode.',recovery:'dalembert',tags:['Frequency','D’Alembert']},
+  dcircles:{desc:'Selects Differs on the least frequent digit in the local tick buffer; past frequency is not a forecast.',tags:['Digits','Observed frequency']},
+  boom:{desc:'Tests a simple recent price-change threshold for mean reversion; the score is the observed one-tick direction frequency, including flat moves; not a forecast.',tags:['Price change','Experimental']},
   step:{desc:'Uses observed rise/fall frequency on the selected symbol.',tags:['Rise/Fall','Frequency']},
-  rsi:{desc:'Uses RSI(14) extremes to select simulated Rise/Fall contracts.',tags:['RSI','Mean reversion']},
+  rsi:{desc:'Uses RSI(14) extremes to select Rise/Fall contracts; the score is a heuristic.',tags:['RSI','Mean reversion']},
   fib:{strategy:'over_under',recovery:'fibonacci',desc:'Frequency scan with Fibonacci sizing: advance one step after a loss and move back two after a win.',tags:['Fibonacci','Sizing']},
   oscar:{strategy:'over_under',recovery:'oscar',desc:'Frequency scan with Oscar-style sizing: increase after wins during a cycle, capped by the remaining one-unit target.',tags:['Oscar','Sizing']},
   antimart:{strategy:'over_under',recovery:'paroli',desc:'Frequency scan with Paroli sizing: double after wins, reset on loss or after three wins.',tags:['Paroli','Sizing']},
   kelly:{strategy:'over_under',recovery:'kelly',name:'Half-Kelly Simulator',desc:'Frequency scan with half-Kelly sizing capped at the base stake. Uses an uncalibrated historical score and illustrative payout, not Deriv prices.',tags:['Half Kelly','Simulator only']},
   scanner_bot:{strategy:'multi_market',desc:'Simulates a scan of all supported mock markets, choosing the highest observed Over 1 or Under 8 frequency. This score is not an edge or forecast.',tags:['Multi-market','Simulation']},
   ai_ens:{name:'Digit Transition Ensemble',strategy:'digit_ensemble',desc:'Blends observed digit parity and last-digit transitions, with an RSI extreme filter. A model score is not a forecast.',tags:['Digits','Transitions','RSI filter']},
-  v100_turbo:{name:'One-Tick Momentum',strategy:'one_tick_momentum',symbol:'1HZ100V',desc:'Simulates a one-tick Rise/Fall contract based on recent tick direction; the app does not provide high-frequency execution.',tags:['One tick','Momentum','Simulation']},
-  macd:{strategy:'macd_cross',desc:'Simulates Rise/Fall on a MACD(12,26,9) signal-line crossover.',tags:['MACD','Crossover']},
-  bb_squeeze:{strategy:'bb_squeeze',desc:'Simulates a breakout beyond the previous Bollinger bands after a relative squeeze.',tags:['Bollinger','Breakout']},
-  diff90:{strategy:'diff_cold',name:'Cold Digit Differs',desc:'Simulates Differs on the least frequent digit when its gap is at least three ticks. No win rate is guaranteed.',tags:['Digits','Gap']},
+  v100_turbo:{name:'One-Tick Momentum',strategy:'one_tick_momentum',symbol:'1HZ100V',desc:'Selects a one-tick Rise/Fall contract based on recent tick direction; not high-frequency execution.',tags:['One tick','Momentum']},
+  macd:{strategy:'macd_cross',desc:'Selects Rise/Fall on a MACD(12,26,9) signal-line crossover.',tags:['MACD','Crossover']},
+  bb_squeeze:{strategy:'bb_squeeze',desc:'Selects a direction after price breaks the previous Bollinger bands following a relative squeeze.',tags:['Bollinger','Breakout']},
+  diff90:{strategy:'diff_cold',name:'Cold Digit Differs',desc:'Selects Differs on the least frequent digit when its gap is at least three ticks. No win rate is guaranteed.',tags:['Digits','Gap']},
   over1:{strategy:'over1_under8',desc:'Compares observed frequencies for Over 1 and Under 8.',tags:['Digits','Frequency']},
-  streak_rev:{strategy:'parity_reversal',desc:'Simulates the opposite parity after a streak of at least four even or odd digits.',tags:['Parity','Reversal']},
+  streak_rev:{strategy:'parity_reversal',desc:'Selects the opposite parity after a streak of at least four even or odd digits.',tags:['Parity','Reversal']},
 };
 function defaultBots(){ return BOT_TEMPLATES.map(b=>({...b,...BOT_OVERRIDES[b.id],installed:false})); }
 function normalizeBots(saved){
@@ -936,7 +1061,7 @@ function normalizeBots(saved){
 function htmlEscape(value){ return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function renderBots(){
   const bots=S.bots||defaultBots();
-  $('botGrid').innerHTML=bots.map(b=>`<div class="bot-card"><div class="ic">${htmlEscape(b.icon)}</div><h4>${htmlEscape(b.name)}</h4><p>${htmlEscape(b.unavailable?'Not implemented yet; this card cannot run an unrelated fallback strategy.':b.desc)}</p><div class="bot-meta">${(b.tags||[]).map(t=>`<span>${htmlEscape(t)}</span>`).join('')}</div><div class="btn-row">${b.unavailable?'<span class="muted">Not implemented</span>':`<button class="btn ${b.installed?'btn-outline':'btn-red'} btn-sm" onclick="installBot('${b.id}')">${b.installed?'✓ Installed':'Install Bot'}</button><button class="btn btn-ghost btn-sm" onclick="runBot('${b.id}')">▶ Run</button>${REAL_DATA_ONLY?'':`<button class="btn btn-ghost btn-sm" onclick="backtestBot('${b.id}')">◐ Backtest</button>`}`}</div></div>`).join('');
+  $('botGrid').innerHTML=bots.map(b=>`<div class="bot-card"><div class="ic">${htmlEscape(b.icon)}</div><h4>${htmlEscape(b.name)}</h4><p>${htmlEscape(b.unavailable?'Not implemented yet; this card cannot run an unrelated fallback strategy.':b.desc)}${REAL_DATA_ONLY && (b.strategy==='multi_market' || b.recovery==='kelly')?' Not available in real-data mode.':''}</p><div class="bot-meta">${(b.tags||[]).map(t=>`<span>${htmlEscape(t)}</span>`).join('')}</div><div class="btn-row">${b.unavailable?'<span class="muted">Not implemented</span>':`<button class="btn ${b.installed?'btn-outline':'btn-red'} btn-sm" onclick="installBot('${b.id}')">${b.installed?'✓ Installed':'Install Bot'}</button><button class="btn btn-ghost btn-sm" onclick="runBot('${b.id}')">▶ Run</button>${REAL_DATA_ONLY?'':`<button class="btn btn-ghost btn-sm" onclick="backtestBot('${b.id}')">◐ Backtest</button>`}`}</div></div>`).join('');
 }
 function installBot(id){ S.bots=S.bots||defaultBots(); const b=S.bots.find(x=>x.id===id); if(!b||b.unavailable) return; b.installed=!b.installed; localStorage.setItem('dbx_bots',JSON.stringify(S.bots)); renderBots(); toast(b.installed?`✅ ${b.name} installed`:`${b.name} removed`); }
 function loadBot(id){
@@ -945,7 +1070,7 @@ function loadBot(id){
   $('autoRecovery').value=b.recovery||'none';
   return b;
 }
-function runBot(id){ const b=loadBot(id); if(!b) return toast('This bot is not implemented.'); $('autoStrategy').value=b.strategy; $('autoSymbol').value=b.symbol||S.selected; if(b.stake>0) $('autoStake').value=b.stake; showView('autotrader'); toast(`▶ ${b.name} loaded into Auto-Trader — press START`); }
+function runBot(id){ const preset=(S.bots||defaultBots()).find(x=>x.id===id); if(REAL_DATA_ONLY && preset && (preset.strategy==='multi_market' || preset.recovery==='kelly')) return toast('This preset is simulator-only and is not available in real-data mode.'); const b=loadBot(id); if(!b) return toast('This bot is not implemented.'); $('autoStrategy').value=b.strategy; $('autoSymbol').value=b.symbol||S.selected; if(b.stake>0) $('autoStake').value=b.stake; showView('autotrader'); toast(`▶ ${b.name} loaded into Auto-Trader — press START`); }
 function backtestBot(id){ const b=loadBot(id); if(!b) return toast('This bot is not implemented.'); $('btBot').value=b.strategy; $('btSymbol').value=b.symbol||S.selected; if(b.stake>0) $('btStake').value=b.stake; showView('backtest'); runBacktest(); }
 
 /* ================= BUILDER ================= */
@@ -976,8 +1101,12 @@ function startAutoTrader(){
   if(REAL_DATA_ONLY && !S.connected) return toast('Connect a Deriv demo account to use the bot.');
   if(S.openContracts.some(c=>c.auto)) return toast('Wait for the previous simulated bot contract to settle.');
   if(!Number.isFinite(+$('autoStake').value) || +$('autoStake').value<=0 || !Number.isInteger(+$('autoMaxTrades').value) || +$('autoMaxTrades').value<1 || !Number.isFinite(+$('autoTP').value) || +$('autoTP').value<=0 || !Number.isFinite(+$('autoSL').value) || +$('autoSL').value<=0 || !Number.isFinite(+$('autoConf').value) || +$('autoConf').value<0 || +$('autoConf').value>100) return toast('Check the stake, trade limit, take profit, stop loss and confidence (0–100).');
+  const minProfit=Number($('autoMinProfit').value);
+  if(!Number.isFinite(minProfit) || minProfit<0) return toast('Enter a valid minimum quoted profit.');
+  if($('autoStrategy').value==='custom' && S.builderBlocks.filter(k=>BLOCKS[k] && BLOCKS[k].type==='act').length!==1) return toast('Builder needs exactly one buy action.');
   const chosenRecovery=($('autoStrategy').value==='custom' && S.builderBlocks.includes('martingale'))?'martingale':$('autoRecovery').value;
   if(!validRiskSettings(S.risk)) return toast('Save valid risk settings before starting.');
+  if(!['none','dalembert','ai','martingale','fibonacci','oscar','paroli','kelly'].includes(chosenRecovery)) return toast('Select a valid recovery mode.');
   const accountMode=S.connected;
   if(accountMode){
     if(!S.isDemo) return toast('Real-account bot execution is not available. Switch to a Deriv demo account.');
@@ -988,13 +1117,13 @@ function startAutoTrader(){
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
     if(+$('autoStake').value>S.balance*S.risk.maxStakePct/100 || +$('autoStake').value>S.balance || +$('autoStake').value>+$('autoSL').value || +$('autoStake').value>S.risk.dailyLoss) return toast('Base stake exceeds an account balance, stake or session loss limit.');
     const accountAtConfirm=S.accountId, wsAtConfirm=S.ws;
-    const confirmed=window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
+    const confirmed=window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
     if(!confirmed) return;
     if(!S.connected || !S.isDemo || S.accountId!==accountAtConfirm || S.ws!==wsAtConfirm || wsAtConfirm.readyState!==1 || S.manualOrder || S.uncertainOrder) return toast('Account or connection changed; bot was not started.');
   }else if(chosenRecovery!=='kelly'){
     const riskError=checkSimulationRisk(+$('autoStake').value); if(riskError) return toast(riskError);
   }
-  S.auto={...S.auto,running:true,mode:accountMode?'account':'simulation',accountId:accountMode?S.accountId:'',sessionId:`${Date.now()}-${Math.random().toString(36).slice(2)}`,lastDecisionTick:-1,startedAt:Date.now(),startBalance:S.balance,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,blocks:[...S.builderBlocks],maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:chosenRecovery,trades:0,wins:0,losses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},curStake:+$('autoStake').value,lossStreak:0};
+  S.auto={...S.auto,running:true,mode:accountMode?'account':'simulation',accountId:accountMode?S.accountId:'',sessionId:`${Date.now()}-${Math.random().toString(36).slice(2)}`,lastDecisionTick:-1,startedAt:Date.now(),startBalance:S.balance,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:+$('autoStake').value,minProfit,blocks:[...S.builderBlocks],maxTrades:+$('autoMaxTrades').value,tp:+$('autoTP').value,sl:+$('autoSL').value,conf:+$('autoConf').value,recovery:chosenRecovery,trades:0,wins:0,losses:0,breakEven:0,grossWins:0,grossLosses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},curStake:+$('autoStake').value,lossStreak:0};
   $('autoBadge').textContent=accountMode?'DEMO ACCOUNT RUNNING':'SIMULATOR RUNNING'; $('autoBadge').style.background='rgba(0,208,156,.2)';
   $('autoPill').textContent='ON'; $('autoStartBtn').textContent='■ RUNNING…';
   autoLog(`▶ ${accountMode?'DERIV DEMO':'SIMULATOR'} Auto-Trader started — ${STRATEGIES[S.auto.strategy]} on ${S.auto.symbol}, stake ${S.auto.stake}, recovery ${S.auto.recovery}`,'warn');
@@ -1018,13 +1147,13 @@ function autoDecision(sym, strat=S.auto.strategy, ticks=S.ticks[sym]||[], blocks
     }
     return {...best, reason:`Titan frequency scan on ${sym} (${st.n} ticks; not a forecast)`};
   }
-  if(strat==='over_under'){ let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; } return {...best,reason:`Over/Under edge ${best.win.toFixed(1)}% on ${st.n} ticks`}; }
+  if(strat==='over_under'){ let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; } return {...best,reason:`Over/Under observed frequency ${best.win.toFixed(1)}% on ${st.n} ticks`}; }
   if(strat==='even_odd'){ return st.evenPct>st.oddPct? {type:'DIGITEVEN',barrier:0,win:st.evenPct,reason:`Even ${st.evenPct.toFixed(1)}% vs Odd ${st.oddPct.toFixed(1)}%`}:{type:'DIGITODD',barrier:0,win:st.oddPct,reason:`Odd ${st.oddPct.toFixed(1)}% vs Even ${st.evenPct.toFixed(1)}%`}; }
   if(strat==='matches'){ const sorted=Object.entries(st.match).sort((a,b)=>a[1]-b[1]); return {type:'DIGITDIFF',barrier:+sorted[0][0],win:100-sorted[0][1],reason:`Coldest digit ${sorted[0][0]} at ${sorted[0][1].toFixed(1)}% — observed non-match ${(100-sorted[0][1]).toFixed(1)}%`}; }
-  if(strat==='rise_fall'||strat==='step'){ return st.risePct>st.fallPct? {type:'CALL',barrier:0,win:st.risePct,reason:`Rise bias ${st.risePct.toFixed(1)}%`}:{type:'PUT',barrier:0,win:st.fallPct,reason:`Fall bias ${st.fallPct.toFixed(1)}%`}; }
+  if(strat==='rise_fall'||strat==='step'){ if(st.riseAllPct===st.fallAllPct) return null; return st.riseAllPct>st.fallAllPct? {type:'CALL',barrier:0,win:st.riseAllPct,reason:`Observed rise frequency ${st.riseAllPct.toFixed(1)}% including flat moves`}:{type:'PUT',barrier:0,win:st.fallAllPct,reason:`Observed fall frequency ${st.fallAllPct.toFixed(1)}% including flat moves`}; }
   if(strat==='rsi'){ const r=rsi(ticks); if(r!=null&&r<30) return {type:'CALL',barrier:0,win:100-r,reason:`RSI oversold ${r.toFixed(0)}`}; if(r!=null&&r>70) return {type:'PUT',barrier:0,win:r,reason:`RSI overbought ${r.toFixed(0)}`}; return null; }
-  if(strat==='dcircles'){ const hot=[...st.freq.keys()].sort((a,b)=>st.freq[b]-st.freq[a])[0]; return {type:'DIGITDIFF',barrier:hot,win:100-st.freq[hot]/st.n*100,reason:`D-Circles: digit ${hot} hottest — Differs`}; }
-  if(strat==='boom_crash'){ const recent=ticks.slice(-10); const spike=Math.abs(recent[recent.length-1]-recent[0])/recent[0]; if(spike>0.002) return {type:recent[recent.length-1]>recent[0]?'PUT':'CALL',barrier:0,win:60,reason:`Spike detected ${(spike*100).toFixed(2)}% — mean reversion`}; return null; }
+  if(strat==='dcircles'){ const cold=st.freq.indexOf(Math.min(...st.freq)); return {type:'DIGITDIFF',barrier:cold,win:100-st.freq[cold]/st.n*100,reason:`D-Circles: least frequent digit ${cold} — Differs`}; }
+  if(strat==='boom_crash'){ const recent=ticks.slice(-10); if(recent[0]<=0) return null; const spike=Math.abs(recent[recent.length-1]-recent[0])/recent[0]; if(spike>0.002){ const down=recent[recent.length-1]>recent[0]; return {type:down?'PUT':'CALL',barrier:0,win:down?st.fallAllPct:st.riseAllPct,reason:`Price change ${(spike*100).toFixed(2)}%; score is observed one-tick direction frequency including flat moves`}; } return null; }
   if(strat==='digit_ensemble'){
     const last=st.digits[st.digits.length-1];
     let occurrences=0, evenAfter=0;
@@ -1042,22 +1171,22 @@ function autoDecision(sym, strat=S.auto.strategy, ticks=S.ticks[sym]||[], blocks
     const recent=ticks.slice(-11); let up=0,down=0;
     for(let i=1;i<recent.length;i++){ if(recent[i]>recent[i-1]) up++; else if(recent[i]<recent[i-1]) down++; }
     if(up===down) return null;
-    const rising=up>down, score=100*Math.max(up,down)/(up+down);
+    const rising=up>down, score=100*Math.max(up,down)/(recent.length-1);
     return {type:rising?'CALL':'PUT',barrier:0,win:score,duration:1,reason:`One-tick momentum: ${up} rises and ${down} falls in the last 10 moves`};
   }
   if(strat==='macd_cross'){
     const prev=macd(ticks.slice(0,-1)), cur=macd(ticks);
     if(!prev || !cur) return null;
-    if(prev.hist<=0 && cur.hist>0) return {type:'CALL',barrier:0,win:st.risePct,reason:'MACD crossed above signal; score is observed rise frequency'};
-    if(prev.hist>=0 && cur.hist<0) return {type:'PUT',barrier:0,win:st.fallPct,reason:'MACD crossed below signal; score is observed fall frequency'};
+    if(prev.hist<=0 && cur.hist>0) return {type:'CALL',barrier:0,win:st.riseAllPct,reason:'MACD crossed above signal; score is observed rise frequency'};
+    if(prev.hist>=0 && cur.hist<0) return {type:'PUT',barrier:0,win:st.fallAllPct,reason:'MACD crossed below signal; score is observed fall frequency'};
     return null;
   }
   if(strat==='bb_squeeze'){
     const prior=ticks.slice(0,-1), band=bollinger(prior), reference=bollinger(prior.slice(0,-20));
     if(!band || !reference || reference.upper<=reference.lower || band.upper-band.lower>(reference.upper-reference.lower)*0.8) return null;
     const last=ticks[ticks.length-1];
-    if(last>band.upper) return {type:'CALL',barrier:0,win:st.risePct,reason:'Price broke above previous bands after a relative squeeze'};
-    if(last<band.lower) return {type:'PUT',barrier:0,win:st.fallPct,reason:'Price broke below previous bands after a relative squeeze'};
+    if(last>band.upper) return {type:'CALL',barrier:0,win:st.riseAllPct,reason:'Price broke above previous bands after a relative squeeze'};
+    if(last<band.lower) return {type:'PUT',barrier:0,win:st.fallAllPct,reason:'Price broke below previous bands after a relative squeeze'};
     return null;
   }
   if(strat==='diff_cold'){
@@ -1078,7 +1207,7 @@ function autoDecision(sym, strat=S.auto.strategy, ticks=S.ticks[sym]||[], blocks
   // These named presets intentionally share the frequency scan.
   if(!['martingale','dalembert','ai_recovery','speedbot'].includes(strat)) return null;
   let best={type:'DIGITOVER',barrier:5,win:50}; for(let b=0;b<10;b++){ if(st.over[b]>best.win)best={type:'DIGITOVER',barrier:b,win:st.over[b]}; if(st.under[b]>best.win)best={type:'DIGITUNDER',barrier:b,win:st.under[b]}; }
-  return {...best,reason:`${strat==='ai_recovery'?'AI Recovery':'Speedbot'}: best edge ${best.win.toFixed(1)}%`};
+  return {...best,reason:`${strat==='ai_recovery'?'AI Recovery':'Speedbot'}: highest observed frequency ${best.win.toFixed(1)}%`};
 }
 // The score is a historical frequency, not expected value or a profit forecast.
 // Replay passes a cutoff so the scanner cannot examine later observations.
@@ -1101,6 +1230,7 @@ function alignedSimulationMarkets(markets,counts){
   return SYMBOLS.every(m=>Array.isArray(markets[m.sym]) && markets[m.sym].length===first.length && (counts[m.sym]||0)===count);
 }
 function evalBuilder(st, blocks=S.builderBlocks, ticks=S.ticks[S.selected]||[]){
+  if(blocks.filter(k=>BLOCKS[k] && BLOCKS[k].type==='act').length!==1) return null;
   const d=st.digits[st.digits.length-1]; let cond=true, action=null;
   for(const k of blocks){
     if(k==='digit_over'&&!(d>5)) cond=false; if(k==='digit_under'&&!(d<5)) cond=false;
@@ -1172,7 +1302,7 @@ function autoTick(){
   renderOpenContracts(); renderAutoStats();
 }
 function onAutoSettle(entry){
-  S.auto.pnl+=entry.profit; S.auto.totalPayout=(S.auto.totalPayout||0)+(entry.win?entry.stake+entry.profit:0); if(entry.win){S.auto.wins++; S.auto.lossStreak=0;} else {S.auto.losses++; S.auto.lossStreak++;} S.auto.curStake=nextSimStake(entry.stake,S.auto.stake,S.auto.recovery,entry.win,S.auto.recoveryState||(S.auto.recoveryState={}),entry.profit);
+  S.auto.pnl+=entry.profit; S.auto.totalPayout=(S.auto.totalPayout||0)+Math.max(0,entry.stake+entry.profit); if(entry.win){S.auto.wins++; S.auto.grossWins=(S.auto.grossWins||0)+entry.profit; S.auto.lossStreak=0;} else {S.auto.losses++; S.auto.grossLosses=(S.auto.grossLosses||0)-entry.profit; S.auto.lossStreak++;} S.auto.curStake=nextSimStake(entry.stake,S.auto.stake,S.auto.recovery,entry.win,S.auto.recoveryState||(S.auto.recoveryState={}),entry.profit);
   const currency=S.auto.mode==='account'?S.currency:'USD';
   autoLog(`${entry.win?'✅ WIN':'❌ LOSS'} ${entry.type} — ${entry.profit>=0?'+':''}${currency} ${fmt(entry.profit)} · Session P/L ${S.auto.pnl>=0?'+':''}${currency} ${fmt(S.auto.pnl)} · ${S.auto.recovery==='kelly'?'Next stake recalculated from next score':`Next stake ${currency} ${fmt(S.auto.curStake)}`}`, entry.win?'win':'loss');
   if(S.auto.strategy==='custom' && S.auto.lossStreak>=3 && (S.auto.blocks||[]).includes('stop')){ autoLog('Builder stop: 3 consecutive losses','warn'); stopAutoTrader(); }
@@ -1180,7 +1310,7 @@ function onAutoSettle(entry){
 }
 function resetAutoStats(){
   if(S.auto.running || S.uncertainOrder || S.openContracts.some(c=>c.auto) || (S.manualOrder && S.manualOrder.kind==='auto') || (Array.isArray(S.accountContracts) && S.accountContracts.some(c=>c.botSessionId && c.botSessionId===S.auto.sessionId && c.status==='OPEN'))) return toast('Stop the bot and wait for settlement before resetting.');
-  S.auto={...S.auto,trades:0,wins:0,losses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},lossStreak:0,startBalance:S.balance,curStake:S.auto.stake||0.35};
+  S.auto={...S.auto,trades:0,wins:0,losses:0,breakEven:0,grossWins:0,grossLosses:0,pnl:0,totalStake:0,totalPayout:0,recoveryState:{},lossStreak:0,startBalance:S.balance,curStake:S.auto.stake||0.35};
   if($('autoLog')) $('autoLog').innerHTML='';
   renderAutoStats();
   toast('Auto-Trader stats reset');
@@ -1189,14 +1319,19 @@ function renderAutoStats(){
   const a=S.auto;
   const totalStake=a.totalStake||0;
   const totalPayout=a.totalPayout||0, currency=a.mode==='account'?htmlEscape(S.currency):'USD';
-  $('autoStats').innerHTML=`<div><b>${currency} ${fmt(totalStake)}</b><span>Total stake</span></div><div><b>${currency} ${fmt(totalPayout)}</b><span>Total payout</span></div><div><b>${a.trades}</b><span>No. of runs</span></div><div><b style="color:var(--red)">${a.losses}</b><span>Contracts lost</span></div><div><b style="color:var(--green)">${a.wins}</b><span>Contracts won</span></div><div><b style="color:${a.pnl>=0?'var(--green)':'var(--red)'}">${a.pnl>=0?'+':''}${currency} ${fmt(a.pnl)}</b><span>Total profit/loss</span></div>`;
+  const settled=a.wins+a.losses+(a.breakEven||0), winRate=settled?`${(a.wins/settled*100).toFixed(1)}%`:'—';
+  const profitFactor=(a.grossLosses||0)>0?((a.grossWins||0)/a.grossLosses).toFixed(2):'—';
+  const averageWin=a.wins?`${currency} ${fmt((a.grossWins||0)/a.wins)}`:'—';
+  const averageLoss=a.losses?`${currency} ${fmt((a.grossLosses||0)/a.losses)}`:'—';
+  const averageResult=settled?`${currency} ${fmt(a.pnl/settled)}`:'—';
+  $('autoStats').innerHTML=`<div><b>${averageWin}</b><span>Average win</span></div><div><b>${averageLoss}</b><span>Average loss</span></div><div><b>${averageResult}</b><span>Average result / settlement</span></div><div><b>${winRate}</b><span>Win rate (settled)</span></div><div><b>${profitFactor}</b><span>Profit factor</span></div><div><b>${currency} ${fmt(totalStake)}</b><span>Total stake</span></div><div><b>${currency} ${fmt(totalPayout)}</b><span>Total payout</span></div><div><b>${a.trades}</b><span>No. of runs</span></div><div><b style="color:var(--red)">${a.losses}</b><span>Contracts lost</span></div><div><b style="color:var(--green)">${a.wins}</b><span>Contracts won</span></div><div><b style="color:${a.pnl>=0?'var(--green)':'var(--red)'}">${a.pnl>=0?'+':''}${currency} ${fmt(a.pnl)}</b><span>Total profit/loss</span></div>`;
 }
 
 /* ================= COPY TRADING ================= */
 function renderFollowers(){ if($('followerList')) $('followerList').textContent='Copy trading is not implemented. Do not share follower tokens with the app.'; }
 
 /* ================= AI PREDICTION ================= */
-const AI_MODEL_VERSION=2;
+const AI_MODEL_VERSION=3;
 function saveAILog(){ try{localStorage.setItem('dbx_ai',JSON.stringify(S.aiLog));}catch(e){ /* evaluation continues in memory */ } }
 function expirePendingPredictions(reason){
   if(!Array.isArray(S.aiLog)){ S.aiLog=[]; return; }
@@ -1209,13 +1344,18 @@ function clearPredictionLog(){
   S.aiLog=[]; saveAILog(); renderAI(); toast('Prediction log cleared.');
 }
 function predictDistribution(sym,ticks){
-  if(ticks.length<20) return null;
-  const st=digitStats(sym,ticks), last=st.digits[st.digits.length-1];
+  if(!Array.isArray(ticks) || ticks.length<20) return null;
+  const st=digitStats(sym,ticks);
+  if(st.n<20) return null;
+  const last=st.digits[st.n-1], counts=Array(10).fill(0);
   let transitions=0;
-  for(let i=0;i<st.digits.length-1;i++) if(st.digits[i]===last) transitions++;
-  // If the latest digit has no observed outgoing transitions, use frequencies alone.
-  const weight=transitions?0.7:0;
-  const dist=st.transPct[last].map((v,i)=>v*weight+(st.freq[i]/st.n*100)*(1-weight));
+  for(let i=0;i<st.digits.length-1;i++){
+    if(st.digits[i]===last){ counts[st.digits[i+1]]++; transitions++; }
+  }
+  // Smoothed frequency prior and 20 prior-weighted observations reduce
+  // small-sample spikes. These are model assumptions, not calibrated odds.
+  const prior=st.freq.map(count=>(count+1)/(st.n+10));
+  const dist=counts.map((count,i)=>100*(count+20*prior[i])/(transitions+20));
   const digit=dist.indexOf(Math.max(...dist));
   return {digit,conf:dist[digit],dist,transitions,sample:st.n};
 }
@@ -1251,30 +1391,32 @@ function aiCalibration(log,sym,source){
     if(!p.dist.every(v=>typeof v==='number' && Number.isFinite(v) && v>=0 && v<=100)) return false;
     return Math.abs(p.dist.reduce((a,b)=>a+b,0)-100)<0.01;
   });
-  if(!valid.length) return {count:0,hits:0,hitRate:null,avgScore:null,brier:null};
+  if(!valid.length) return {count:0,hits:0,hitRate:null,avgScore:null,brier:null,brierSkill:null};
   const hits=valid.filter(p=>p.resolved).length;
   const avgScore=valid.reduce((sum,p)=>sum+Math.max(...p.dist),0)/valid.length;
   const brier=valid.reduce((sum,p)=>sum+p.dist.reduce((v,prob,i)=>v+(prob/100-(i===p.actual?1:0))**2,0),0)/valid.length;
-  return {count:valid.length,hits,hitRate:hits/valid.length*100,avgScore,brier};
+  return {count:valid.length,hits,hitRate:hits/valid.length*100,avgScore,brier,brierSkill:1-brier/0.9};
 }
 function renderAI(pred){
   if(!Array.isArray(S.aiLog)) S.aiLog=[];
   pred=pred||S.aiLog.find(p=>p && p.modelVersion===AI_MODEL_VERSION && p.sym===S.selected && p.source===S.feed);
   const metrics=aiCalibration(S.aiLog,S.selected,S.feed);
-  if($('aiCalibration')) $('aiCalibration').innerHTML=`<div class="big-stat"><span>Resolved predictions</span><b>${metrics.count}</b></div><div class="big-stat"><span>Hit rate</span><b>${metrics.count?metrics.hitRate.toFixed(1)+'%':'—'}</b></div><div class="big-stat"><span>Average top score</span><b>${metrics.count?metrics.avgScore.toFixed(1)+'%':'—'}</b></div><div class="big-stat"><span>Multiclass Brier score</span><b>${metrics.count?metrics.brier.toFixed(3):'—'}</b></div><p class="muted small">${S.feed==='deriv'?'Deriv':'Simulated'} ticks for ${htmlEscape(S.selected)} only; latest 200 log entries. Lower Brier is better; a uniform digit model scores 0.900 on each observation. Small samples are unreliable.</p>`;
+  if($('aiCalibration')) $('aiCalibration').innerHTML=`<div class="big-stat"><span>Resolved predictions</span><b>${metrics.count}</b></div><div class="big-stat"><span>Hit rate</span><b>${metrics.count?metrics.hitRate.toFixed(1)+'%':'—'}</b></div><div class="big-stat"><span>Average top score</span><b>${metrics.count?metrics.avgScore.toFixed(1)+'%':'—'}</b></div><div class="big-stat"><span>Multiclass Brier score</span><b>${metrics.count?metrics.brier.toFixed(3):'—'}</b></div><div class="big-stat"><span>Skill vs uniform</span><b>${metrics.count?(metrics.brierSkill*100).toFixed(1)+'%':'—'}</b></div><p class="muted small">${S.feed==='deriv'?'Deriv':'Simulated'} ticks for ${htmlEscape(S.selected)} only; latest 200 log entries. Lower Brier is better; uniform scores 0.900. Positive skill means lower Brier than uniform on these logged outcomes, not proof of future performance. Previous model versions are excluded; small samples are unreliable.</p>`;
   const validPred=pred && Number.isInteger(pred.digit) && pred.digit>=0 && pred.digit<=9 && Array.isArray(pred.dist) && pred.dist.length===10 && pred.dist.every(v=>Number.isFinite(v) && v>=0 && v<=100);
   if(validPred){
     const score=Math.max(...pred.dist);
     $('aiPrediction').innerHTML=`<div style="text-align:center;padding:10px"><div class="big-digit" style="font-size:52px">${pred.digit}</div><div class="muted">Selected digit · ${htmlEscape(pred.sym)}</div><div style="font-size:22px;font-weight:800;margin-top:8px">${score.toFixed(1)}% model score</div><div class="edge-bar"><i style="width:${score}%"></i></div><div class="muted small">${htmlEscape(pred.time)} · ${htmlEscape(pred.source)} · ${Number(pred.transitions)||0} matching transitions · Not a guarantee</div></div>`;
     drawBars($('aiDistChart'), ['0','1','2','3','4','5','6','7','8','9'], pred.dist, null);
+    if($('aiDistLegend')) $('aiDistLegend').textContent=pred.dist.map((v,i)=>`${i}: ${v.toFixed(1)}%`).join(' · ');
     const st=digitStats(S.selected), ticks=S.ticks[S.selected]||[], r=rsi(ticks);
     $('aiFeatures').innerHTML=`<div class="big-stat"><span>Last digit</span><b>${st.digits.at(-1)??'—'}</b></div><div class="big-stat"><span>Sample size</span><b>${st.n} ticks</b></div><div class="big-stat"><span>Even / Odd</span><b>${st.evenPct.toFixed(0)}% / ${st.oddPct.toFixed(0)}%</b></div><div class="big-stat"><span>Rise / Fall</span><b>${st.risePct.toFixed(0)}% / ${st.fallPct.toFixed(0)}%</b></div><div class="big-stat"><span>RSI(14)</span><b>${r==null?'—':r.toFixed(1)}</b></div>`;
   } else {
     $('aiPrediction').textContent='Waiting for at least 20 ticks on this symbol and feed.';
     $('aiFeatures').textContent='No model data available.';
+    if($('aiDistLegend')) $('aiDistLegend').textContent='Waiting for model data.';
     const cv=$('aiDistChart'); if(cv && cv.getContext){ const ctx=cv.getContext('2d'); if(ctx) ctx.clearRect(0,0,cv.width,cv.height); }
   }
-  const rows=S.aiLog.filter(p=>p && p.sym===S.selected && p.source===S.feed).slice(0,15);
+  const rows=S.aiLog.filter(p=>p && p.modelVersion===AI_MODEL_VERSION && p.sym===S.selected && p.source===S.feed).slice(0,15);
   $('aiLogTable').innerHTML=`<tr><th>Time</th><th>Symbol</th><th>Predicted</th><th>Model score</th><th>Actual</th><th>Result</th></tr>`+rows.map(p=>`<tr><td>${htmlEscape(p.time)}</td><td>${htmlEscape(p.sym)}</td><td><b>${htmlEscape(p.digit)}</b></td><td>${Number.isFinite(Number(p.conf))?Number(p.conf).toFixed(1)+'%':'—'}</td><td>${htmlEscape(p.actual??'—')}</td><td>${p.expired?'Expired':p.resolved==null?'⏳ Pending':p.resolved?'✅ Hit':'❌ Miss'}</td></tr>`).join('');
 }
 
@@ -1464,7 +1606,15 @@ function showView(v){
   if(v==='academy') renderCourses();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function selectSymbol(sym){ if(REAL_DATA_ONLY && S.feed==='deriv' && (!S.activeMarkets || !S.activeMarkets.includes(sym))) return toast('Market is unavailable.'); S.selected=sym; if(REAL_DATA_ONLY && S.feed==='deriv') subscribeLiveSymbol(sym); $('symbolSelect').value=sym; renderMainChart(); renderDigits(); updateProposal(); updatePriceChip(); }
+function selectSymbol(sym){
+  if(REAL_DATA_ONLY && S.feed==='deriv' && (!S.activeMarkets || !S.activeMarkets.includes(sym))) return toast('Market is unavailable.');
+  S.selected=sym;
+  if(REAL_DATA_ONLY && S.feed==='deriv'){ subscribeLiveSymbol(sym); refreshFeedStatus(); }
+  $('symbolSelect').value=sym; $('heroSymbol').textContent=symByCode(sym).name;
+  ['heroDigit','heroEdge','heroParity','heroAI'].forEach(id=>{ if($(id)) $(id).textContent='—'; });
+  drawLineChart($('heroChart'),(S.ticks[sym]||[]).slice(-60));
+  renderMainChart(); renderDigits(); updateProposal(); updatePriceChip();
+}
 function changeTF(tf){ S.tf=+tf; buildCandles(S.selected,S.tf); renderMainChart(); }
 function changeChartType(t){ S.chartType=t; renderMainChart(); }
 
@@ -1629,6 +1779,7 @@ function init(){
   // mock feed loop (2s ticks, like Deriv synthetic indices)
   if(!REAL_DATA_ONLY) setInterval(mockTick, 2000);
   setInterval(checkAutoTimer, 1000);
+  setInterval(refreshFeedStatus, 5000);
   setInterval(()=>{ if(S.ws&&S.ws.readyState===1){ try{S.ws.send(JSON.stringify({ping:1}));}catch(e){} } }, 25000);
   window.addEventListener('resize',()=>{ renderMainChart(); });
   // Keyboard shortcuts (1-9 switch views)
