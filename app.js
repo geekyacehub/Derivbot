@@ -35,7 +35,10 @@ function readAccountState(){
     const rawContracts=localStorage.getItem('dbx_account_contracts');
     const order=rawOrder?JSON.parse(rawOrder):null;
     const contracts=rawContracts?JSON.parse(rawContracts):[];
-    if ((order!==null && (typeof order!=='object' || Array.isArray(order))) || !Array.isArray(contracts) || contracts.some(c=>!c || typeof c!=='object' || Array.isArray(c))) throw Error('invalid account tracking');
+    const validText=v=>typeof v==='string' && v.length>0 && v.length<=200;
+    const validOrder=o=>o && typeof o==='object' && !Array.isArray(o) && validText(o.accountId) && validText(o.symbol) && validText(o.type) && validText(o.currency) && typeof o.stake==='number' && Number.isFinite(o.stake) && o.stake>0 && Number.isFinite(o.createdAt);
+    const validContract=c=>c && typeof c==='object' && !Array.isArray(c) && safeContractId(c.id) && validText(c.accountId) && validText(c.symbol) && validText(c.type) && validText(c.currency) && typeof c.stake==='number' && Number.isFinite(c.stake) && c.stake>0 && Number.isFinite(c.createdAt) && (c.status==='OPEN' || (c.status==='SETTLED' && typeof c.profit==='number' && Number.isFinite(c.profit)));
+    if ((order!==null && !validOrder(order)) || !Array.isArray(contracts) || contracts.some(c=>!validContract(c)) || new Set(contracts.map(c=>c.accountId+':'+c.id)).size!==contracts.length) throw Error('invalid account tracking');
     return {order,contracts};
   }catch(e){ return {order:{trackingDamaged:true},contracts:[]}; }
 }
@@ -493,7 +496,7 @@ function renderStatement(){
   if(!snapshot || !S.connected || snapshot.accountId!==S.accountId){target.textContent='No recent statement loaded. Check Deriv for complete account history.'; return;}
   target.textContent='';
   const summary=document.createElement('div');
-  summary.textContent=`Latest ${snapshot.transactions.length} transactions received at ${new Date(snapshot.receivedAt).toLocaleTimeString()}. This is a limited snapshot, not complete history.`;
+  summary.textContent=`Page starting at transaction ${snapshot.offset+1}; ${snapshot.transactions.length} received at ${new Date(snapshot.receivedAt).toLocaleTimeString()}. This is a limited snapshot, not complete history.`;
   target.appendChild(summary);
   for(const t of snapshot.transactions){
     const local=t.contractId && (S.accountContracts||[]).find(c=>c.accountId===snapshot.accountId && String(c.id)===t.contractId);
@@ -504,15 +507,24 @@ function renderStatement(){
     target.appendChild(row);
   }
 }
-function fetchStatement(){
+function fetchStatement(offset=0, dateTo=Math.floor(Date.now()/1000)){
   const ws=S.ws;
+  if(!Number.isSafeInteger(offset) || offset<0 || offset>1000000 || !Number.isSafeInteger(dateTo) || dateTo<0 || dateTo>9999999999) return toast('Invalid statement page.');
   if(!S.connected || !S.accountId || !ws || ws.readyState!==1) return toast('Connect to Deriv before requesting account history.');
   if(S.statementRequest) return toast('Statement request already in progress.');
   const req=++S.orderSeq, accountId=S.accountId;
-  S.statementRequest={req,accountId,ws}; S.accountStatement=null; S.statementStatus='loading'; renderStatement();
-  try{ ws.send(JSON.stringify({statement:1,limit:100,offset:0,req_id:req})); }
+  S.statementRequest={req,accountId,ws,offset,dateTo}; S.accountStatement=null; S.statementStatus='loading'; renderStatement();
+  try{ ws.send(JSON.stringify({statement:1,limit:100,offset,date_to:dateTo,req_id:req})); }
   catch(e){S.statementRequest=null; S.statementStatus='unavailable'; renderStatement(); return toast('Could not request account statement.');}
   setTimeout(()=>{if(S.statementRequest && S.statementRequest.req===req && S.statementRequest.ws===ws){S.statementRequest=null; S.statementStatus='unavailable'; renderStatement(); logConn('Statement request timed out; check Deriv.');}},15000);
+}
+function pageStatement(direction){
+  const snapshot=S.accountStatement;
+  if(!snapshot || snapshot.accountId!==S.accountId || ![-1,1].includes(direction)) return;
+  if(direction===1 && snapshot.transactions.length<100) return toast('No further page is indicated.');
+  const offset=snapshot.offset+direction*100;
+  if(offset<0) return;
+  fetchStatement(offset,snapshot.dateTo);
 }
 function handleStatementMessage(d,ws){
   const pending=S.statementRequest;
@@ -522,7 +534,7 @@ function handleStatementMessage(d,ws){
   const rows=d.statement && d.statement.transactions;
   if(d.error || !Array.isArray(rows) || rows.length>100 || rows.some(t=>!t || typeof t!=='object' || Array.isArray(t))){S.accountStatement=null; S.statementStatus='unavailable'; renderStatement(); logConn('Could not read account statement; check Deriv.'); return true;}
   const transactions=rows.map(t=>({action:typeof t.action_type==='string'?t.action_type.slice(0,40):'unknown',amount:typeof t.amount==='number' && Number.isFinite(t.amount)?t.amount:null,time:Number.isSafeInteger(t.transaction_time) && t.transaction_time>=0 && t.transaction_time<=9999999999?t.transaction_time:null,contractId:safeContractId(t.contract_id)?String(t.contract_id):''}));
-  S.accountStatement={accountId:pending.accountId,receivedAt:Date.now(),transactions}; S.statementStatus='loaded'; renderStatement(); return true;
+  S.accountStatement={accountId:pending.accountId,receivedAt:Date.now(),offset:pending.offset,dateTo:pending.dateTo,transactions}; S.statementStatus='loaded'; renderStatement(); return true;
 }
 function updateConnUI(){
   $('connDot').className='dot'+(S.connected?' live':'');
