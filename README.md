@@ -149,4 +149,6 @@ Demo bot sessions show win rate and profit factor from their locally tracked set
 
 Bot strategy fixtures test preset wiring and deterministic signal behavior; they do not establish profitability. Direction scores include flat observed ticks and are not five-tick win-rate estimates. Builder flows require exactly one buy action.
 
-The trade screen can request a read-only snapshot of up to 100 recent account transactions and show matches to locally tracked contract IDs. It does not reconcile settlements or clear uncertain orders; check full history in Deriv. Demo bot session statistics include average win, loss and result per locally tracked settlement, not a future-return prediction.
+The trade screen can request read-only pages of up to 100 account transactions each and show matches to locally tracked contract IDs. It does not reconcile settlements or clear uncertain orders; check full history in Deriv. Demo bot session statistics include average win, loss and result per locally tracked settlement, not a future-return prediction.
+
+Statement pages share an end-time cutoff, but offsets may still shift as account history changes. Corrupted local order or contract records raise a warning and block new orders until verified and acknowledged.

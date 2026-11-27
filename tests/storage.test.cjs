@@ -82,3 +82,18 @@ assert.equal(t.get('feedStatus').textContent,'DATA: DERIV LIVE');
 t.run("S.tickTimes.R_75=Date.now()-16000; refreshFeedStatus()");
 assert.equal(t.get('feedStatus').textContent,'DATA: NO RECENT SELECTED TICK');
 console.log('Live chart rendering, tick ordering and freshness checks passed');
+// Incomplete or contradictory account records must fail closed on restart.
+const goodContract={id:'123',accountId:'VRTC1',symbol:'R_75',type:'DIGITEVEN',currency:'USD',stake:1,createdAt:1000,status:'OPEN',botSessionId:null};
+const goodOrder={accountId:'VRTC1',symbol:'R_75',type:'DIGITEVEN',currency:'USD',stake:1,createdAt:1000,kind:'manual'};
+t=setup({dbx_account_contracts:JSON.stringify([goodContract]),dbx_uncertain_order:JSON.stringify(goodOrder)});
+assert.equal(t.run('S.accountContracts.length'),1);
+assert.equal(t.run('S.uncertainOrder.accountId'),'VRTC1');
+for(const invalid of [{}, {...goodContract,id:'bad'}, {...goodContract,stake:0}, {...goodContract,status:'SETTLED'}, {...goodContract,accountId:''}]){
+ t=setup({dbx_account_contracts:JSON.stringify([invalid])});
+ assert.equal(t.run('S.uncertainOrder.trackingDamaged'),true);
+}
+t=setup({dbx_account_contracts:JSON.stringify([goodContract,goodContract])});
+assert.equal(t.run('S.uncertainOrder.trackingDamaged'),true);
+t=setup({dbx_uncertain_order:'{}'});
+assert.equal(t.run('S.uncertainOrder.trackingDamaged'),true);
+console.log('Persisted account record integrity checks passed');

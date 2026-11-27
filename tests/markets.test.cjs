@@ -155,3 +155,16 @@ for(const kind of ['new','legacy']){
  assert.equal(h.run('S.accountStatement'),null,'disconnect clears statement');
 }
 console.log('Read-only account statement checks passed');
+// History pagination keeps the same cutoff, isolates requests and cannot clear warnings.
+{
+ const h=harness(); h.run("openNewDerivWS('wss://api.derivws.com/ws?otp=demo',{account_id:'VRTC1',account_type:'demo',currency:'USD',balance:1000})");
+ const ws=h.sockets[0]; ws.open(); h.run('fetchStatement()');
+ const first=ws.sent.filter(x=>x.statement===1).at(-1); assert.equal(first.offset,0); assert.ok(Number.isSafeInteger(first.date_to));
+ ws.message({req_id:first.req_id,statement:{transactions:Array.from({length:100},(_,i)=>({action_type:'buy',transaction_time:1700000000,amount:-1,contract_id:i+1}))}});
+ h.run('pageStatement(1)'); const next=ws.sent.filter(x=>x.statement===1).at(-1);
+ assert.equal(next.offset,100); assert.equal(next.date_to,first.date_to);
+ ws.message({req_id:next.req_id,statement:{transactions:[{action_type:'sell',amount:2,contract_id:2}]}});
+ const n=ws.sent.length; h.run('pageStatement(1)'); assert.equal(ws.sent.length,n,'short page does not suggest more');
+ h.run('pageStatement(-1)'); const previous=ws.sent.filter(x=>x.statement===1).at(-1); assert.equal(previous.offset,0); assert.equal(previous.date_to,first.date_to);
+}
+console.log('Statement pagination checks passed');
