@@ -765,7 +765,7 @@ function buyContract(){
     if(!Number.isFinite(cap) || cap<=0 || cap>100 || p.stake>S.balance*cap/100) return toast('Stake exceeds your configured maximum stake percentage.');
     const req=++S.orderSeq;
     S.manualOrder={phase:'proposal', req, symbol:S.selected, accountId:S.accountId, currency:S.currency, ...p};
-    try { S.ws.send(JSON.stringify({proposal:1, amount:p.stake, basis:'stake', contract_type:p.type, currency:S.currency, duration:p.dur, duration_unit:'t', symbol:S.selected, ...(['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(p.type)?{barrier:String(p.barrier)}:{}), req_id:req})); }
+    try { S.ws.send(JSON.stringify({proposal:1, amount:p.stake, basis:'stake', contract_type:p.type, currency:S.currency, duration:p.dur, duration_unit:'t', underlying_symbol:S.selected, ...(['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(p.type)?{barrier:String(p.barrier)}:{}), req_id:req})); }
     catch(e){ failManualOrder('Could not request a proposal.'); return; }
     setTimeout(()=>{ if(S.manualOrder && S.manualOrder.phase==='proposal' && S.manualOrder.req===req) failManualOrder('Quote request timed out; no purchase sent.'); },15000);
     renderAccountTracking(); toast('Requesting an account quote — no purchase yet.'); return;
@@ -1266,7 +1266,7 @@ function requestDemoBotOrder(dec,sym){
   if(S.manualOrder || S.uncertainOrder || !S.auto.running) return;
   const req=++S.orderSeq, ws=S.ws, stake=S.auto.curStake, dur=dec.duration||5;
   S.manualOrder={kind:'auto',phase:'proposal',req,symbol:sym,accountId:S.accountId,currency:S.currency,type:dec.type,barrier:dec.barrier,stake,dur,botSessionId:S.auto.sessionId,createdAt:Date.now()};
-  try{ ws.send(JSON.stringify({proposal:1,amount:stake,basis:'stake',contract_type:dec.type,currency:S.currency,duration:dur,duration_unit:'t',symbol:sym,...(['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:String(dec.barrier)}:{}),req_id:req})); }
+  try{ ws.send(JSON.stringify({proposal:1,amount:stake,basis:'stake',contract_type:dec.type,currency:S.currency,duration:dur,duration_unit:'t',underlying_symbol:sym,...(['DIGITOVER','DIGITUNDER','DIGITMATCH','DIGITDIFF'].includes(dec.type)?{barrier:String(dec.barrier)}:{}),req_id:req})); }
   catch(e){ failManualOrder('Could not request demo bot quote.'); return; }
   setTimeout(()=>{ if(S.manualOrder && S.manualOrder.kind==='auto' && S.manualOrder.phase==='proposal' && S.manualOrder.req===req) failManualOrder('Demo bot quote timed out; no purchase sent.'); },15000);
   renderAccountTracking(); autoLog(`Demo quote requested: ${dec.type} ${sym} ${S.currency} ${fmt(stake)}.`, 'info');

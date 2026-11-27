@@ -168,3 +168,26 @@ console.log('Read-only account statement checks passed');
  h.run('pageStatement(-1)'); const previous=ws.sent.filter(x=>x.statement===1).at(-1); assert.equal(previous.offset,0); assert.equal(previous.date_to,first.date_to);
 }
 console.log('Statement pagination checks passed');
+// Both manual and demo bot proposals use the current Deriv proposal schema.
+for(const kind of ['new','legacy']){
+ const h=harness();
+ if(kind==='new')h.run("openNewDerivWS('wss://api.derivws.com/ws?otp=demo',{account_id:'VRTC1',account_type:'demo',currency:'USD',balance:1000})");
+ else h.run("tryConnect('token')");
+ const ws=h.sockets[0];ws.open();
+ if(kind==='legacy')ws.message({req_id:3,authorize:{loginid:'VRTC1',is_virtual:1,currency:'USD',balance:1000}});
+ const discovery=ws.sent.filter(x=>x.active_symbols && x.req_id!==2).at(-1);
+ ws.message({req_id:discovery.req_id,active_symbols:[{underlying_symbol:'R_75'}]});
+ h.el('contractType').value='DIGITOVER'; h.run('buyContract()'); const manual=ws.sent.filter(x=>x.proposal).at(-1);
+ assert.equal(manual.underlying_symbol,'R_75',`${kind} manual`);
+ assert.equal(Object.hasOwn(manual,'symbol'),false);
+ assert.equal(manual.barrier,'5');
+ ws.message({req_id:manual.req_id,error:{message:'No quote'}});
+ for(const [id,value] of Object.entries({autoStake:'1',autoMaxTrades:'3',autoTP:'10',autoSL:'10',autoConf:'0',autoMinProfit:'0',autoRecovery:'none',autoStrategy:'even_odd',autoSymbol:'R_75'}))h.el(id).value=value;
+ h.run("S.ticks.R_75=Array.from({length:100},(_,i)=>100+(i%10)/100); S.tickCounts.R_75=100; S.tickTimes.R_75=Date.now(); S.precisionKnown.R_75=2; startAutoTrader(); autoTick()");
+ const bot=ws.sent.filter(x=>x.proposal).at(-1);
+ assert.notEqual(bot.req_id,manual.req_id);
+ assert.equal(bot.underlying_symbol,'R_75',`${kind} bot`);
+ assert.equal(Object.hasOwn(bot,'symbol'),false);
+ assert.equal(ws.sent.some(x=>x.buy),false,'no purchase merely from requesting a quote');
+}
+console.log('Current proposal symbol schema checks passed');
