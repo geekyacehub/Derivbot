@@ -1139,12 +1139,37 @@ function disarmDemoAutoStart(notify=true){
   catch(e){ if(notify) toast('Could not cancel auto-start. Close this tab or clear its site data.'); return false; }
   renderDemoAutoStart(); if(notify) toast('Automatic demo start cancelled.'); return true;
 }
+function demoAutoStartSettingsError(c){
+  if(!c.strategy || !Object.hasOwn(STRATEGIES,c.strategy) || ['custom','multi_market'].includes(c.strategy)) return 'Choose a supported demo strategy (not Custom Builder or Multi-Market).';
+  if(!c.symbol || !/^[A-Za-z0-9_.-]{1,64}$/.test(c.symbol)) return 'Choose a valid market.';
+  if(!Number.isFinite(c.stake) || c.stake<=0) return 'Enter a base stake greater than zero.';
+  if(!Number.isInteger(c.maxTrades) || c.maxTrades<1 || c.maxTrades>100) return 'Set Max Trades to a whole number from 1 to 100.';
+  if(!Number.isFinite(c.tp) || c.tp<=0) return 'Enter a Take Profit greater than zero.';
+  if(!Number.isFinite(c.sl) || c.sl<=0) return 'Enter a Stop Loss greater than zero.';
+  if(!Number.isFinite(c.conf) || c.conf<0 || c.conf>100) return 'Set Minimum strategy score between 0 and 100.';
+  if(!Number.isFinite(c.minProfit) || c.minProfit<0) return 'Set Minimum quoted profit to zero or greater.';
+  if(!['none','dalembert','ai','martingale','fibonacci','oscar','paroli'].includes(c.recovery)) return 'Choose a supported recovery mode.';
+  if(c.quoteSearch && c.strategy!=='over_under') return 'Quote search is only supported for Over/Under Sniper.';
+  if(c.quoteSearch && c.minProfit<=0) return 'Quote search requires a minimum quoted profit greater than zero.';
+  return null;
+}
+function reportDemoAutoStartError(message){
+  const status=$('autoStartStatus'); if(status) status.textContent='Not armed: '+message;
+  toast(message);
+}
 function armDemoAutoStart(){
   if(!S.connected || !S.isDemo || S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !S.accountId) return toast('Connect a demo account before arming auto-start.');
   if(S.auto.running || S.manualOrder || S.uncertainOrder || (S.accountContracts||[]).some(c=>c.accountId===S.accountId && c.status==='OPEN')) return toast('Stop the bot and resolve pending or locally tracked open orders first.');
   const c={version:1,accountId:S.accountId,currency:S.currency,expiresAt:Date.now()+8*3600000,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:Number($('autoStake').value),maxTrades:Number($('autoMaxTrades').value),tp:Number($('autoTP').value),sl:Number($('autoSL').value),conf:Number($('autoConf').value),minProfit:Number($('autoMinProfit').value),recovery:$('autoRecovery').value,quoteSearch:!!$('autoQuoteSearch').checked,guard:!!$('autoGuard').checked};
-  if(!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(c.symbol) || !validRiskSettings(S.risk) || !Number.isFinite(S.balance) || c.stake>S.balance || c.stake>S.balance*S.risk.maxStakePct/100 || c.stake>c.sl || c.stake>S.risk.dailyLoss) return toast('Check the market, account balance and risk limits before arming.');
-  if(!validDemoAutoStart(c)) return toast('Check the bot settings; auto-start supports one to 100 trades and demo-compatible strategies.');
+  const settingsError=demoAutoStartSettingsError(c);
+  if(settingsError) return reportDemoAutoStartError(settingsError);
+  if(!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(c.symbol)) return reportDemoAutoStartError('Wait for the selected Deriv market to become available.');
+  if(!validRiskSettings(S.risk)) return reportDemoAutoStartError('Save valid Risk Manager settings before arming.');
+  if(!Number.isFinite(S.balance) || c.stake>S.balance) return reportDemoAutoStartError('Base stake exceeds the available account balance.');
+  if(c.stake>S.balance*S.risk.maxStakePct/100) return reportDemoAutoStartError('Base stake exceeds the maximum stake percentage in Risk Manager.');
+  if(c.stake>c.sl) return reportDemoAutoStartError('Stop Loss must be at least as large as the base stake.');
+  if(c.stake>S.risk.dailyLoss) return reportDemoAutoStartError('Base stake exceeds the Risk Manager loss limit.');
+  if(!validDemoAutoStart(c)) return reportDemoAutoStartError('Could not validate the demo account or auto-start authorization.');
   const account=S.accountId, ws=S.ws;
   if(!window.confirm(`ARM ONE AUTOMATIC DEMO SESSION?\n${c.strategy} on ${c.symbol}; stake ${c.stake} ${c.currency}; maximum ${c.maxTrades} trades; take profit ${c.tp}; stop loss ${c.sl}; score ${c.conf}%; recovery ${c.recovery}; minimum quoted win profit ${c.minProfit}; quote search ${c.quoteSearch?'on':'off'}; drawdown guard ${c.guard?'on':'off'}.\n\nThis tab may start and buy automatically when data is ready, including after a refresh. Consent expires in 8 hours and is used once. Closing, duplicating, or restoring tabs may affect tab storage; copies may start separate sessions. Limits are local and cannot guarantee protection. Continue?`)) return;
   if(!S.connected || !S.isDemo || S.accountId!==account || S.ws!==ws || ws.readyState!==1 || S.auto.running || S.manualOrder || S.uncertainOrder) return toast('Account changed; auto-start not armed.');
