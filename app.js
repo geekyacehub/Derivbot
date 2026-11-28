@@ -1123,7 +1123,7 @@ const STRATEGIES={multi_market:'Multi-Market Frequency Scanner',digit_ensemble:'
 // Explicit, short-lived, one-session consent; no credentials are stored here.
 const DEMO_AUTO_KEY='dbx_demo_auto_once_v1', DEMO_AUTO_PERMIT={};
 function validDemoAutoStart(c){
-    if(!c || c.version!==1 || typeof c.accountId!=='string' || !c.accountId || typeof c.currency!=='string' || !c.currency || !Number.isFinite(c.expiresAt) || c.expiresAt<=Date.now() || c.expiresAt>Date.now()+8*3600000 || typeof c.strategy!=='string' || !Object.hasOwn(STRATEGIES,c.strategy) || ['custom','multi_market'].includes(c.strategy) || typeof c.symbol!=='string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(c.symbol) || !['none','dalembert','ai','martingale','fibonacci','oscar','paroli'].includes(c.recovery) || !Number.isFinite(c.stake) || c.stake<=0 || !Number.isInteger(c.maxTrades) || c.maxTrades<1 || c.maxTrades>100 || !Number.isFinite(c.tp) || c.tp<=0 || !Number.isFinite(c.sl) || c.sl<=0 || !Number.isFinite(c.conf) || c.conf<0 || c.conf>100 || !Number.isFinite(c.minProfit) || c.minProfit<0 || typeof c.quoteSearch!=='boolean' || (c.quoteSearch && (c.strategy!=='over_under' || c.minProfit<=0)) || typeof c.guard!=='boolean') return false;
+    if(!c || c.version!==2 || typeof c.accountId!=='string' || !c.accountId || typeof c.currency!=='string' || !c.currency || !Number.isFinite(c.expiresAt) || c.expiresAt<=Date.now() || c.expiresAt>Date.now()+8*3600000 || typeof c.strategy!=='string' || !Object.hasOwn(STRATEGIES,c.strategy) || ['custom','multi_market'].includes(c.strategy) || typeof c.symbol!=='string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(c.symbol) || !['none','dalembert','ai','martingale','fibonacci','oscar','paroli'].includes(c.recovery) || !Number.isFinite(c.stake) || c.stake<=0 || !Number.isInteger(c.maxTrades) || c.maxTrades<1 || c.maxTrades>100 || !Number.isFinite(c.tp) || c.tp<=0 || !Number.isFinite(c.sl) || c.sl<=0 || !Number.isFinite(c.conf) || c.conf<0 || c.conf>100 || !Number.isFinite(c.minProfit) || c.minProfit<0 || typeof c.quoteSearch!=='boolean' || (c.quoteSearch && (c.strategy!=='over_under' || c.minProfit<=0)) || typeof c.guard!=='boolean') return false;
     return true;
 }
 function readDemoAutoStart(){
@@ -1160,7 +1160,7 @@ function reportDemoAutoStartError(message){
 function armDemoAutoStart(){
   if(!S.connected || !S.isDemo || S.feed!=='deriv' || !S.ws || S.ws.readyState!==1 || !S.accountId) return toast('Connect a demo account before arming auto-start.');
   if(S.auto.running || S.manualOrder || S.uncertainOrder || (S.accountContracts||[]).some(c=>c.accountId===S.accountId && c.status==='OPEN')) return toast('Stop the bot and resolve pending or locally tracked open orders first.');
-  const c={version:1,accountId:S.accountId,currency:S.currency,expiresAt:Date.now()+8*3600000,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:Number($('autoStake').value),maxTrades:Number($('autoMaxTrades').value),tp:Number($('autoTP').value),sl:Number($('autoSL').value),conf:Number($('autoConf').value),minProfit:Number($('autoMinProfit').value),recovery:$('autoRecovery').value,quoteSearch:!!$('autoQuoteSearch').checked,guard:!!$('autoGuard').checked};
+  const c={version:2,accountId:S.accountId,currency:S.currency,expiresAt:Date.now()+8*3600000,strategy:$('autoStrategy').value,symbol:$('autoSymbol').value,stake:Number($('autoStake').value),maxTrades:Number($('autoMaxTrades').value),tp:Number($('autoTP').value),sl:Number($('autoSL').value),conf:Number($('autoConf').value),minProfit:Number($('autoMinProfit').value),recovery:$('autoRecovery').value,quoteSearch:!!$('autoQuoteSearch').checked,guard:!!$('autoGuard').checked};
   const settingsError=demoAutoStartSettingsError(c);
   if(settingsError) return reportDemoAutoStartError(settingsError);
   if(!Array.isArray(S.activeMarkets) || !S.activeMarkets.includes(c.symbol)) return reportDemoAutoStartError('Wait for the selected Deriv market to become available.');
@@ -1171,7 +1171,7 @@ function armDemoAutoStart(){
   if(c.stake>S.risk.dailyLoss) return reportDemoAutoStartError('Base stake exceeds the Risk Manager loss limit.');
   if(!validDemoAutoStart(c)) return reportDemoAutoStartError('Could not validate the demo account or auto-start authorization.');
   const account=S.accountId, ws=S.ws;
-  if(!window.confirm(`ARM ONE AUTOMATIC DEMO SESSION?\n${c.strategy} on ${c.symbol}; stake ${c.stake} ${c.currency}; maximum ${c.maxTrades} trades; take profit ${c.tp}; stop loss ${c.sl}; score ${c.conf}%; recovery ${c.recovery}; minimum quoted win profit ${c.minProfit}; quote search ${c.quoteSearch?'on':'off'}; drawdown guard ${c.guard?'on':'off'}.\n\nThis tab may start and buy automatically when data is ready, including after a refresh. Consent expires in 8 hours and is used once. Closing, duplicating, or restoring tabs may affect tab storage; copies may start separate sessions. Limits are local and cannot guarantee protection. Continue?`)) return;
+  if(!window.confirm(`ARM ONE AUTOMATIC DEMO SESSION?\n${c.strategy} on ${c.symbol}; stake ${c.stake} ${c.currency}; maximum ${c.maxTrades} trades; take profit ${c.tp}; stop loss ${c.sl}; score ${c.conf}%; recovery ${c.recovery}; minimum quoted win profit ${c.minProfit}; quote search ${c.quoteSearch?'up to 18 quotes':'off'}; drawdown guard ${c.guard?'on':'off'}.\n\nThis tab may start and buy automatically when data is ready, including after a refresh. Consent expires in 8 hours and is used once. Closing, duplicating, or restoring tabs may affect tab storage; copies may start separate sessions. Limits are local and cannot guarantee protection. Continue?`)) return;
   if(!S.connected || !S.isDemo || S.accountId!==account || S.ws!==ws || ws.readyState!==1 || S.auto.running || S.manualOrder || S.uncertainOrder) return toast('Account changed; auto-start not armed.');
   try{sessionStorage.setItem(DEMO_AUTO_KEY,JSON.stringify(c)); if(!readDemoAutoStart()) throw Error('not saved');}
   catch(e){return toast('Could not save auto-start consent.');}
@@ -1218,7 +1218,7 @@ function startAutoTrader(permit){
     if($('autoStrategy').value==='multi_market' || chosenRecovery==='kelly') return toast('Multi-market and Kelly modes are simulator-only.');
     if(+$('autoStake').value>S.balance*S.risk.maxStakePct/100 || +$('autoStake').value>S.balance || +$('autoStake').value>+$('autoSL').value || +$('autoStake').value>S.risk.dailyLoss) return toast('Base stake exceeds an account balance, stake or session loss limit.');
     const accountAtConfirm=S.accountId, wsAtConfirm=S.ws;
-    const confirmed=permit===DEMO_AUTO_PERMIT || window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; quote search: ${quoteSearch?'up to 6 Over/Under quotes':'off'}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
+    const confirmed=permit===DEMO_AUTO_PERMIT || window.confirm(`START AUTOMATED DERIV DEMO TRADING?\nAccount: ${S.accountId} (${S.currency})\nStrategy: ${STRATEGIES[$('autoStrategy').value]} on ${$('autoSymbol').value}\nInitial stake: ${$('autoStake').value}; minimum quoted win profit: ${minProfit}; quote search: ${quoteSearch?'up to 18 Over/Under quotes':'off'}; max trades: ${$('autoMaxTrades').value}; session stop loss: ${$('autoSL').value}.\n\nOrders will be placed automatically. Limits only track this browser session and cannot guarantee protection; other account activity is not included. This experimental flow has not been tested against Deriv. Continue?`);
     if(!confirmed) return;
     if(!S.connected || !S.isDemo || S.accountId!==accountAtConfirm || S.ws!==wsAtConfirm || wsAtConfirm.readyState!==1 || S.manualOrder || S.uncertainOrder) return toast('Account or connection changed; bot was not started.');
   }else if(chosenRecovery!=='kelly'){
@@ -1367,7 +1367,7 @@ function overUnderQuoteCandidates(sym,ticks,minScore){
   const candidates=[];
   for(let barrier=0;barrier<=8;barrier++) candidates.push({type:'DIGITOVER',barrier,win:st.over[barrier]});
   for(let barrier=1;barrier<=9;barrier++) candidates.push({type:'DIGITUNDER',barrier,win:st.under[barrier]});
-  return candidates.filter(c=>c.win>=minScore).sort((a,b)=>b.win-a.win || a.barrier-b.barrier || a.type.localeCompare(b.type)).slice(0,6);
+  return candidates.filter(c=>c.win>=minScore).sort((a,b)=>b.win-a.win || a.barrier-b.barrier || a.type.localeCompare(b.type)).slice(0,18);
 }
 function autoTick(){
   if(!S.auto.running) return;

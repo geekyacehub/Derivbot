@@ -215,13 +215,27 @@ function searchHarness(){
 }
 {
  const {h,ws}=searchHarness();
- for(let i=0;i<6;i++){
+ for(let i=0;i<18;i++){
   const q=ws.sent.filter(x=>x.proposal).at(-1);
   ws.message({req_id:q.req_id,proposal:{id:'low'+i,ask_price:1,payout:1.09}});
  }
- assert.equal(ws.sent.filter(x=>x.proposal).length,6,'bounded search');
+ assert.equal(ws.sent.filter(x=>x.proposal).length,18,'bounded search');
  assert.equal(ws.sent.filter(x=>x.buy).length,0); assert.equal(h.run('S.auto.running'),false);
  assert.match(h.el('autoLog').innerHTML,/Quote skipped: potential profit/,'final rejection must be visible');
+}
+// A candidate beyond the previous six-quote limit can qualify.
+{
+ const {h,ws}=searchHarness();
+ for(let i=0;i<6;i++){
+  const q=ws.sent.filter(x=>x.proposal).at(-1);
+  ws.message({req_id:q.req_id,proposal:{id:'low-'+i,ask_price:1,payout:1.4}});
+ }
+ const seventh=ws.sent.filter(x=>x.proposal).at(-1);
+ assert.equal(ws.sent.filter(x=>x.proposal).length,7);
+ assert.equal(ws.sent.filter(x=>x.buy).length,0);
+ ws.message({req_id:seventh.req_id,proposal:{id:'seventh-qualifies',ask_price:1,payout:1.5}});
+ assert.equal(ws.sent.filter(x=>x.buy).length,1);
+ assert.equal(ws.sent.filter(x=>x.buy)[0].buy,'seventh-qualifies');
 }
 {
  const {h,ws}=searchHarness(); const q=ws.sent.filter(x=>x.proposal).at(-1);
