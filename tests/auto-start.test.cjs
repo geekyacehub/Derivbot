@@ -82,3 +82,11 @@ for(const [id,value,pattern] of [
  assert.match(h.el('autoStartStatus').textContent,/greater than zero/);
  assert.equal(h.tab.size,0);
 }
+
+// Consent for the previous six-quote behavior must not silently authorize the expanded search.
+{
+ const h=harness(); h.run('armDemoAutoStart()');
+ const key=[...h.tab.keys()][0], c=JSON.parse(h.tab.get(key)); c.version=1; c.quoteSearch=true; h.tab.set(key,JSON.stringify(c));
+ h.run("S.ticks.R_75=Array(50).fill(100.01); S.precisionKnown.R_75=2; S.tickTimes.R_75=Date.now(); maybeStartArmedDemo('R_75')");
+ assert.equal(h.run('S.auto.running'),false); assert.equal(h.socket.sent.length,0);
+}
